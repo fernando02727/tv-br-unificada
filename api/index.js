@@ -35,8 +35,29 @@ async function loadEpg() {
   return epgCache.buf;
 }
 
+let indexLoading = null;
+function loadLocalIndex() {
+  const local = path.join(ROOT, 'data', 'index.json');
+  const data = fs.existsSync(local) ? JSON.parse(fs.readFileSync(local, 'utf8')) : { channels: [], sources: {}, updatedAt: null };
+  data.byId = new Map(data.channels.map(c => [c.id, c]));
+  return data;
+}
 async function loadIndex(force = false) {
   if (!force && cache.data && Date.now() - cache.at < INDEX_TTL) return cache.data;
+  if (!force && cache.data) { // vencido: serve o atual e atualiza em segundo plano
+    indexLoading ||= loadIndexNow().finally(() => { indexLoading = null; });
+    return cache.data;
+  }
+  if (!cache.data && !force) {
+    indexLoading ||= loadIndexNow().finally(() => { indexLoading = null; });
+    const r = await Promise.race([indexLoading, new Promise(ok => setTimeout(() => ok(null), 900))]);
+    if (r) return r;
+    cache = { at: Date.now() - INDEX_TTL + 15000, data: loadLocalIndex() };
+    return cache.data;
+  }
+  return loadIndexNow();
+}
+async function loadIndexNow(force = false) {
   try {
     if (!INDEX_URL) throw new Error('INDEX_URL não definido');
     const r = await fetch(INDEX_URL + '?t=' + Math.floor(Date.now() / 60000), { headers: { 'user-agent': UA } });
@@ -44,6 +65,7 @@ async function loadIndex(force = false) {
     const data = await r.json();
     data.byId = new Map(data.channels.map(c => [c.id, c]));
     cache = { at: Date.now(), data };
+    lastIndexError = '';
   } catch (e) {
     lastIndexError = `${e.message} (${INDEX_URL || 'sem INDEX_URL'})`;
     if (!cache.data) {
@@ -218,48 +240,68 @@ function eventVisible(c, now = Date.now()) {
   return !c.event || (now >= c.eventStart - 30 * 60e3 && now <= c.eventStart + 3 * 3600e3);
 }
 
+function urlKey(u) { try { const x = new URL(u); return x.host + x.pathname; } catch { return u; } }
+function qOf(c, k, sid, s, n) { return c.q?.[`${k}|${urlKey(s.url)}`] || c.q?.[`${k}|${sid}|${n}`] || null; }
+function stabOf(q) { const h = q?.hist || ''; return h ? [...h].filter(x => x === '1').length / h.length : (q?.ok ? 0.7 : 0.5); }
+function isDead(q) { if (!q || q.ok || q.blocked) return false; const h = q.hist || ''; return h.length < 2 || h.endsWith('00'); }
+
 async function stream(id) {
   const hit = streamCache.get(id);
   if (hit && Date.now() - hit.at < 20000) return hit.data;
   const idx = await loadIndex();
   const c = idx.byId.get(id);
   if (!c) return { streams: [] };
+  if (!eventVisible(c)) return { streams: [] };
+  // se já há >=2 fontes rápidas e estáveis medidas, nem consulta as fontes lentas (NTC)
+  const fastKnown = Object.entries(c.q || {}).filter(([k, q]) => q.ok && q.ttfb < 1200 && stabOf(q) >= 0.8 && !SRC[k.split('|')[0]]?.listTimeoutMs).length;
+  const srcs = c.srcs.filter(([k]) => !(fastKnown >= 2 && SRC[k]?.listTimeoutMs));
   const deadline = Date.now() + Number(process.env.LIST_DEADLINE_MS || 3500);
   const t0 = Date.now(), timing = [];
-  const lists = await Promise.all(c.srcs.map(async ([k, sid]) => { const l = await fetchStreams(k, sid, deadline); timing.push([k, sid, l.length, Date.now() - t0]); return l; }));
+  const lists = await Promise.all(srcs.map(async ([k, sid]) => { const l = await fetchStreams(k, sid, deadline); timing.push([k, sid, l.length, Date.now() - t0]); return l; }));
   const seen = new Set();
-  const cands = [];
+  let cands = [];
   lists.forEach((l, li) => {
-    const [k, sid] = c.srcs[li];
+    const [k, sid] = srcs[li];
     l.forEach((s, n) => {
       if (seen.has(s.url)) return;
       seen.add(s.url);
-      const q = c.q?.[`${k}|${sid}|${n}`] || null;
-      cands.push({ s, q });
+      cands.push({ s, q: qOf(c, k, sid, s, n) });
     });
   });
-  // medição real (feita de hora em hora a partir de São Paulo) manda; texto do addon só se não houver medição
   const score = ({ s, q }) => {
-    const alive = !q ? 1 : q.ok ? 2 : q.blocked ? 1 : 0;
-    // texto do addon só vale se a fonte for confiável; NTC escreve "4K/UHD" em stream 720p
     let th = textHeight(s);
     if (SRC[s._src]?.trustQualityText === false && th > 720) th = 720;
     const h = q?.h || th || 700;
-    const hist = q?.hist || '';
-    const stab = hist ? [...hist].filter(x => x === '1').length / hist.length : 0.5;
-    return { alive, h, stab, ttfb: q?.ttfb ?? 1500 };
+    const stab = stabOf(q);
+    const ttfb = q?.ttfb ?? 1500;
+    const alive = q ? (q.ok ? 2 : isDead(q) ? 0 : 1) : 1;
+    // "estável" = respondeu nas últimas medições e em tempo de tocar
+    const stable = alive === 2 && stab >= 0.8 && ttfb < 2500 ? 1 : 0;
+    return { alive, h, stab, ttfb, stable };
   };
-  const ranked = cands.map(x => ({ ...x, sc: score(x) }));
+  let ranked = cands.map(x => ({ ...x, sc: score(x) }));
+  const alive = ranked.filter(x => x.sc.alive > 0);
+  if (alive.length) ranked = alive; // mortos saem da lista (o app não consegue detectá-los sozinho)
+  // ordem: estável > melhor resolução REAL > mais rápido > estabilidade > prioridade da fonte
   ranked.sort((a, b) =>
-    (b.sc.alive - a.sc.alive) ||
-    (b.sc.h - a.sc.h) ||
-    (b.sc.stab - a.sc.stab) ||
-    (Math.round(a.sc.ttfb / 400) - Math.round(b.sc.ttfb / 400)) ||
-    (a.s._pri - b.s._pri));
-  const streams = ranked.slice(0, 12).map(({ s, q, sc }) => {
+    (b.sc.stable - a.sc.stable) || (b.sc.alive - a.sc.alive) || (b.sc.h - a.sc.h) ||
+    (Math.round(a.sc.ttfb / 400) - Math.round(b.sc.ttfb / 400)) || (b.sc.stab - a.sc.stab) || (a.s._pri - b.s._pri));
+  // lista curta e variada: o app testa as 8 primeiras e espera a mais lenta
+  const max = Number(process.env.MAX_STREAMS || 5);
+  const pick = [], hosts = new Set(), perKey = new Map();
+  for (const pass of [0, 1]) for (const x of ranked) {
+    if (pick.length >= max || pick.includes(x)) continue;
+    const host = urlKey(x.s.url).split('/')[0];
+    const key = x.s._src + '|' + qLabel(x.sc.h);
+    if (pass === 0 && (hosts.has(host) || (perKey.get(key) || 0) >= 1)) continue;
+    if ((perKey.get(key) || 0) >= 2) continue;
+    pick.push(x); hosts.add(host); perKey.set(key, (perKey.get(key) || 0) + 1);
+  }
+  pick.sort((a, b) => ranked.indexOf(a) - ranked.indexOf(b));
+  const streams = pick.map(({ s, q, sc }) => {
     const src = SRC[s._src];
-    const tag = sc.alive === 2 ? (sc.stab >= 0.8 ? '✅ estável' : '⚠️ oscilando') : sc.alive === 0 ? '✕ fora do ar' : '○ não medido';
-    const extra = q?.ok ? ` · ${q.codec === 'hevc' ? 'H.265' : 'H.264'}${q.kbps ? ' · ' + (q.kbps / 1000).toFixed(1) + ' Mbps' : ''}` : '';
+    const tag = sc.alive === 2 ? (sc.stable ? '✅ estável' : '⚠️ oscilando') : '○ não medido';
+    const extra = q?.ok ? ` · ${q.codec === 'hevc' ? 'H.265' : 'H.264'}${q.kbps ? ' · ' + (q.kbps / 1000).toFixed(1) + ' Mbps' : ''}${q.ttfb ? ' · ' + q.ttfb + ' ms' : ''}` : '';
     const out = {
       url: s.url,
       name: `${qLabel(sc.h)} · ${src?.name || s._src}`,
@@ -270,7 +312,7 @@ async function stream(id) {
     return out;
   });
   const data = { streams, cacheMaxAge: 20 };
-  if (globalThis.__debugProbe) return { ...data, _timing: timing, _hasQ: !!c.q, _index: idx.updatedAt };
+  if (globalThis.__debugProbe) return { ...data, _timing: timing, _hasQ: !!c.q, _fastKnown: fastKnown, _index: idx.updatedAt };
   streamCache.set(id, { at: Date.now(), data });
   if (streamCache.size > 300) streamCache.delete(streamCache.keys().next().value);
   return data;
@@ -317,9 +359,9 @@ async function medir(body) {
       if (!SRC[k]) continue;
       jobs.push((async () => {
         const list = await fetchStreams(k, sid, Date.now() + 5000, true);
-        await Promise.all(list.slice(0, 4).map(async (s, n) => {
+        await Promise.all(list.slice(0, 6).map(async (s, n) => {
           const r = await inspectStream(s, 5000);
-          out[ch.id][`${k}|${sid}|${n}`] = { ok: !!r.ok, h: r.h || 0, kbps: r.kbps || 0, ttfb: r.ttfb, codec: r.codec || '', blocked: !!r.blocked, st: r.status || r.kind || '' };
+          out[ch.id][`${k}|${urlKey(s.url)}`] = { ok: !!r.ok, h: r.h || 0, kbps: r.kbps || 0, ttfb: r.ttfb, codec: r.codec || '', blocked: !!r.blocked, st: r.status || r.kind || '' };
         }));
       })());
     }
@@ -418,7 +460,10 @@ export default async function handler(req, res) {
     if ((m = p.match(/^\/stream\/tv\/(.+?)\.json$/))) {
       globalThis.__debugProbe = url.searchParams.has('debug');
       if (globalThis.__debugProbe) streamCache.delete(m[1]);
-      return json(await stream(m[1]), 20);
+      const data = await stream(m[1]);
+      res.setHeader('Content-Type', 'application/json; charset=utf-8');
+      res.setHeader('Cache-Control', globalThis.__debugProbe ? 'no-store' : 'public, max-age=15, s-maxage=20, stale-while-revalidate=60');
+      return res.status(200).send(JSON.stringify(data));
     }
     res.status(404).json({ error: 'not found' });
   } catch (e) {
