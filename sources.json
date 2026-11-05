@@ -62,6 +62,231 @@
             "title": "+SBT 720p"
           }
         ]
+      },
+      {
+        "id": "oficial:tvbrasil",
+        "name": "TV Brasil",
+        "genres": [
+          "Abertos"
+        ],
+        "streams": [
+          {
+            "url": "https://tvbrasil-stream.ebc.com.br/index.m3u8",
+            "title": "EBC oficial 720p"
+          }
+        ]
+      },
+      {
+        "id": "oficial:tvcamara",
+        "name": "TV Câmara",
+        "genres": [
+          "Abertos"
+        ],
+        "streams": [
+          {
+            "url": "https://stream3.camara.gov.br/tv1/manifest.m3u8",
+            "title": "Câmara oficial 1080p"
+          }
+        ]
+      },
+      {
+        "id": "oficial:tvcultura",
+        "name": "TV Cultura",
+        "genres": [
+          "Abertos"
+        ],
+        "streams": [
+          {
+            "url": "https://player-tvcultura.stream.uol.com.br/live/tvcultura.m3u8",
+            "title": "UOL oficial 540p"
+          }
+        ]
+      },
+      {
+        "id": "oficial:culturafast",
+        "name": "Cultura Fast",
+        "genres": [
+          "Abertos"
+        ],
+        "streams": [
+          {
+            "url": "https://fpa-gateway.tvcultura.com.br:8181/memfs/606caef0-a290-413d-9f1f-8fcdb3a73831.m3u8",
+            "title": "FPA oficial 720p"
+          }
+        ]
+      },
+      {
+        "id": "oficial:playtv",
+        "name": "PlayTV",
+        "genres": [
+          "Abertos"
+        ],
+        "streams": [
+          {
+            "url": "https://isaocorp.cloudecast.com/playtv/index.m3u8",
+            "title": "1080p"
+          }
+        ]
+      },
+      {
+        "id": "oficial:redebrasil",
+        "name": "Rede Brasil",
+        "genres": [
+          "Abertos"
+        ],
+        "streams": [
+          {
+            "url": "https://video09.logicahost.com.br/redebrasiloficial/redebrasiloficial/playlist.m3u8",
+            "title": "oficial 720p"
+          },
+          {
+            "url": "https://redebrasil.nuvemplay.live/hls/stream.m3u8",
+            "title": "nuvemplay 720p"
+          }
+        ]
+      },
+      {
+        "id": "oficial:acritica",
+        "name": "TV A Crítica",
+        "genres": [
+          "Abertos"
+        ],
+        "streams": [
+          {
+            "url": "https://video01.brascast.com/bdctv/bdctv/playlist.m3u8",
+            "title": "720p"
+          }
+        ]
+      },
+      {
+        "id": "oficial:redetv",
+        "name": "RedeTV!",
+        "genres": [
+          "Abertos"
+        ],
+        "streams": [
+          {
+            "url": "https://tv01.zas.media:1936/redetvparana/redetvparana/playlist.m3u8",
+            "title": "RedeTV! Paraná (afiliada) 1080p"
+          }
+        ]
+      },
+      {
+        "id": "oficial:tvideonews",
+        "name": "TVideoNews",
+        "genres": [
+          "Notícias"
+        ],
+        "streams": [
+          {
+            "url": "https://video01.logicahost.com.br/tvideonews/tvideonews/playlist.m3u8",
+            "title": "1080p"
+          }
+        ]
+      },
+      {
+        "id": "oficial:cnnbrasilmoney",
+        "name": "CNN Brasil Money",
+        "genres": [
+          "Notícias"
+        ],
+        "streams": [
+          {
+            "url": "https://amg01391-amg01391c57-amgplt0026.playout.now3.amagi.tv/playlist/amg01391-amg01391c57-amgplt0026/playlist.m3u8",
+            "title": "Amagi FAST 1080p"
+          }
+        ]
+      },
+      {
+        "id": "oficial:fifaplus",
+        "name": "FIFA+ Português",
+        "genres": [
+          "Esportes"
+        ],
+        "streams": [
+          {
+            "url": "https://e3be9ac5.wurl.com/master/f36d25e7e52f1ba8d7e56eb859c636563214f541/TEctYnJfRklGQVBsdXNQb3J0dWd1ZXNlX0hMUw/playlist.m3u8",
+            "title": "Wurl FAST 720p"
+          }
+        ]
+      },
+      {
+        "id": "oficial:sonyoneclassics",
+        "name": "Sony One Classics",
+        "genres": [
+          "Filmes e Séries"
+        ],
+        "streams": [
+          {
+            "url": "https://spt-sonyoneclassicas-1-br.samsung.wurl.tv/playlist.m3u8",
+            "title": "Samsung TV Plus 720p"
+          }
+        ]
+      },
+      {
+        "id": "oficial:runtime",
+        "name": "Runtime",
+        "genres": [
+          "Filmes e Séries"
+        ],
+        "streams": [
+          {
+            "url": "https://stream.ads.ottera.tv/playlist.m3u8?network_id=2153",
+            "title": "Ottera FAST 720p"
+          }
+        ]
+      },
+      {
+        "id": "oficial:runtimeacao",
+        "name": "Runtime Ação",
+        "genres": [
+          "Filmes e Séries"
+        ],
+        "streams": [
+          {
+            "url": "https://run-rt-ra.otteravision.com/run/rt_ra/rt_ra_720.m3u8",
+            "title": "Ottera FAST 720p"
+          }
+        ]
+      },
+      {
+        "id": "oficial:comedycentralpluto",
+        "name": "Comedy Central Pluto TV",
+        "genres": [
+          "Filmes e Séries"
+        ],
+        "streams": [
+          {
+            "url": "https://jmp2.uk/plu-5f357e91b18f0b00073583d2.m3u8",
+            "title": "Pluto TV (via redirect jmp2.uk)"
+          }
+        ]
+      },
+      {
+        "id": "oficial:comedycentralsouthpark",
+        "name": "Comedy Central South Park",
+        "genres": [
+          "Filmes e Séries"
+        ],
+        "streams": [
+          {
+            "url": "https://jmp2.uk/plu-609ae66b359b270007869ff1.m3u8",
+            "title": "Pluto TV (via redirect jmp2.uk)"
+          }
+        ]
+      },
+      {
+        "id": "oficial:adrenalinapura",
+        "name": "Adrenalina Pura TV",
+        "genres": [
+          "Filmes e Séries"
+        ],
+        "streams": [
+          {
+            "url": "https://jmp2.uk/plu-61b790b985706b00072cb797.m3u8",
+            "title": "Pluto TV (via redirect jmp2.uk)"
+          }
+        ]
       }
     ]
   },
@@ -94,7 +319,12 @@
     "priority": 4,
     "enabled": true,
     "url": "https://canais-saimo.pages.dev/",
-    "note": "Lista pública da Saimo com filtro: sem hosts desativados, sem links com senha, sem DRM, sem proxy de terceiros. Tudo medido."
+    "note": "Lista pública da Saimo com filtro: sem hosts desativados, sem links com senha, sem DRM, sem proxy de terceiros. Tudo medido.",
+    "blockHosts": [
+      "frostview.squareweb.app",
+      "dadinhodetapioca.fun"
+    ],
+    "_why": "frostview.squareweb.app/relay/m/<base64> wraps IPTV-panel URLs with embedded user/pass (absoluto.top, paldi.pro) and the host is offline (Square Cloud 'site not found'); 297 of 766 approved Saimo streams. dadinhodetapioca.fun/play/*.html are HTML player pages, not streams (medirurl: nao-video)."
   },
   {
     "key": "iptvorg",
