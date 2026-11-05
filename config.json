@@ -7,7 +7,8 @@
     ],
     "applyToGroups": [
       "Abertos"
-    ]
+    ],
+    "maxPerNetwork": 3
   },
   "rename": {},
   "hide": [],
@@ -28,5 +29,6 @@
     "hoursAhead": 48,
     "manual": {},
     "filler": true
-  }
+  },
+  "subgroup": {}
 }

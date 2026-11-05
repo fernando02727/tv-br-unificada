@@ -15,5 +15,8 @@
     "deploymentEnabled": {
       "data": false
     }
-  }
+  },
+  "regions": [
+    "gru1"
+  ]
 }
