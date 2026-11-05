@@ -166,6 +166,12 @@ const listCache = new Map();
 async function fetchStreams(srcKey, itemId, deadline, measuring = false) {
   const src = SRC[srcKey];
   if (!src) return [];
+  if (src.type === 'static') {
+    const ch = (src.channels || []).find(c => c.id === itemId);
+    if (!ch) return [];
+    return (ch.streams || []).map(s => ({ url: s.url, name: s.name || src.name, title: s.title || '', _src: srcKey, _pri: src.priority || 99,
+      ...(s.referer ? { behaviorHints: { proxyHeaders: { request: { Referer: s.referer, Origin: new URL(s.referer).origin } } } } : {}) }));
+  }
   const ck = srcKey + '|' + itemId;
   const hit = listCache.get(ck);
   if (hit && !measuring && Date.now() - hit.at < 60000) return hit.list;
