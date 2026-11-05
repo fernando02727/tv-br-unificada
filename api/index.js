@@ -122,6 +122,10 @@ const PUBLIC_URL = process.env.PUBLIC_URL || CONFIG.publicUrl || '';
 // canal sem programação: a imagem vira um quadro ao vivo do que está passando (renova a cada 10 min)
 function liveThumb(c) {
   if (CONFIG.liveThumbs === false || !PUBLIC_URL || c.epg || c.event) return null;
+  // só onde nem o nome diz o que passa: streaming/PPV, lutas, ou canal sem imagem oficial (cartão gerado)
+  const groups = CONFIG.liveThumbGroups || ['Esportes · Streaming PPV', 'Esportes · Lutas', 'Esportes · Mais Esportes'];
+  const card = !c.logo || /\/logo\//.test(c.logo);
+  if (!groups.includes(c.sub) && !card) return null;
   const bucket = Math.floor(Date.now() / 600000);
   return `${PUBLIC_URL}/thumb/${encodeURIComponent(c.id)}.jpg?l=${encodeURIComponent(c.logo || '')}&b=${bucket}`;
 }
