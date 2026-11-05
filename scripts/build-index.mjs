@@ -34,6 +34,10 @@ async function getJSON(url, timeout = 20000) {
 }
 
 async function readSource(src) {
+  if (src.type === 'static') {
+    const items = (src.channels || []).map(c => ({ id: c.id, name: c.name, logo: c.logo || '', genres: c.genres || [], catName: src.name }));
+    return { items, status: { ok: items.length > 0, count: items.length, catalogs: ['static'], error: '', name: src.name } };
+  }
   const manifestUrl = resolveManifest(src);
   if (!manifestUrl) return { items: [], status: { ok: false, error: 'link não configurado' } };
   const base = manifestUrl.replace(/\/manifest\.json(\?.*)?$/, '');
@@ -78,6 +82,7 @@ async function probeChannel(ch, srcByKey, deadline) {
     if (Date.now() > deadline) return true; // sem tempo: na dúvida, mantém
     const h = health[k] ||= { ok: 0, fail: 0 };
     if (h.ok === 0 && h.fail >= 6) continue; // fonte fora do ar: pula
+    if (srcByKey[k]?.type === 'static') return true;
     const base = resolveManifest(srcByKey[k]).replace(/\/manifest\.json(\?.*)?$/, '');
     if (!base) continue;
     try {
@@ -268,14 +273,14 @@ async function main() {
   let epgInfo = null;
   if (cfg.epg?.sources?.length) {
     try {
-      const r = await buildEpg(channels, cfg.epg, console.log, async () => { await chooseLogos(channels); fallbackLogos(channels, cfg); });
+      const r = await buildEpg(channels, cfg.epg, console.log, async () => { await chooseLogos(channels, console.log, cfg); fallbackLogos(channels, cfg); });
       fs.mkdirSync(path.dirname(OUT), { recursive: true });
       fs.writeFileSync(path.join(path.dirname(OUT), 'epg.xml.gz'), r.gz);
       epgInfo = { channels: r.matched, programmes: r.programmes };
     } catch (e) { console.log('EPG falhou: ' + e.message); }
   }
 
-  if (!cfg.epg?.sources?.length) await chooseLogos(channels);
+  if (!cfg.epg?.sources?.length) await chooseLogos(channels, console.log, cfg);
   fallbackLogos(channels, cfg);
   for (const c of channels) { delete c.logos; delete c.epgIcon; }
   const status = {};
