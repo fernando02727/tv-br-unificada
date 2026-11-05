@@ -3,9 +3,16 @@
     "api/index.js": {
       "includeFiles": "{sources.json,config.json,lib/**,data/**}",
       "maxDuration": 20
+    },
+    "api/logo.js": {
+      "maxDuration": 10
     }
   },
   "rewrites": [
+    {
+      "source": "/logo/(.*)",
+      "destination": "/api/logo"
+    },
     {
       "source": "/(.*)",
       "destination": "/api/index"

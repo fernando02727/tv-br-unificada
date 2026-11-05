@@ -63,5 +63,6 @@
     "manual": {},
     "filler": true
   },
-  "subgroup": {}
+  "subgroup": {},
+  "publicUrl": "https://tv-br-unificada.vercel.app"
 }
