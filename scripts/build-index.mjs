@@ -6,6 +6,8 @@ import { fileURLToPath } from 'node:url';
 import { channelKey, displayName, classify, slugify, GROUPS, stripAccents } from '../lib/channels.mjs';
 import { sortChannels, subgroupOf } from '../lib/subgroups.mjs';
 import { chooseLogos } from '../lib/logos.mjs';
+import { readSaimo } from '../lib/saimo.mjs';
+const SOURCE_DATA = {};
 import { keepByRegion, regionOf, isForeign } from '../lib/regions.mjs';
 import { prettyName, regionalName, fitName } from '../lib/names.mjs';
 import { buildEpg } from '../lib/epg.mjs';
@@ -34,6 +36,11 @@ async function getJSON(url, timeout = 20000) {
 }
 
 async function readSource(src) {
+  if (src.type === 'saimo') {
+    const r = await readSaimo(src);
+    SOURCE_DATA[src.key] = r.data;
+    return { items: r.items, status: { ok: r.items.length > 0, count: r.items.length, catalogs: ['catalogo.txt'], error: `fontes: ${r.stats.total}, aprovadas ${r.stats.ok} (fora: ${r.stats.desativado} desativadas, ${r.stats.senha} com senha, ${r.stats.drm} DRM, ${r.stats.proxy} proxy)`, name: src.name } };
+  }
   if (src.type === 'static') {
     const items = (src.channels || []).map(c => ({ id: c.id, name: c.name, logo: c.logo || '', genres: c.genres || [], catName: src.name }));
     return { items, status: { ok: items.length > 0, count: items.length, catalogs: ['static'], error: '', name: src.name } };
@@ -83,6 +90,7 @@ async function probeChannel(ch, srcByKey, deadline) {
     const h = health[k] ||= { ok: 0, fail: 0 };
     if (h.ok === 0 && h.fail >= 6) continue; // fonte fora do ar: pula
     if (srcByKey[k]?.type === 'static') return true;
+    if (srcByKey[k]?.type === 'saimo') return !!SOURCE_DATA[k]?.[id]?.length;
     const base = resolveManifest(srcByKey[k]).replace(/\/manifest\.json(\?.*)?$/, '');
     if (!base) continue;
     try {
@@ -291,6 +299,7 @@ async function main() {
     totalChannels: channels.length,
     hidden,
     epg: epgInfo,
+    sourceData: SOURCE_DATA,
     sources: status,
     channels
   };
