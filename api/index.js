@@ -117,11 +117,21 @@ function nowNext(c) {
   return `Agora: ${cur[2]}${nx ? ` · ${hhmm(nx[0])} ${nx[2]}` : ''}`;
 }
 
+const CONFIG = (() => { try { return JSON.parse(fs.readFileSync(path.join(ROOT, 'config.json'), 'utf8')); } catch { return {}; } })();
+const PUBLIC_URL = process.env.PUBLIC_URL || CONFIG.publicUrl || '';
+// canal sem programação: a imagem vira um quadro ao vivo do que está passando (renova a cada 10 min)
+function liveThumb(c) {
+  if (CONFIG.liveThumbs === false || !PUBLIC_URL || c.epg || c.event) return null;
+  const bucket = Math.floor(Date.now() / 600000);
+  return `${PUBLIC_URL}/thumb/${encodeURIComponent(c.id)}.jpg?l=${encodeURIComponent(c.logo || '')}&b=${bucket}`;
+}
+
 function toPreview(c) {
   const n = new Set(c.srcs.map(s => s[0])).size;
+  const thumb = liveThumb(c);
   return {
     id: c.id, type: 'tv', name: c.name,
-    poster: c.logo || undefined, logo: c.logo || undefined, posterShape: 'square',
+    poster: thumb || c.logo || undefined, logo: c.logo || undefined, posterShape: thumb ? 'landscape' : 'square',
     genres: [c.sub || c.group],
     description: nowNext(c) || `${c.sub || c.group} · ${n} fonte(s): ${[...new Set(c.srcs.map(s => SRC[s[0]]?.name || s[0]))].join(', ')}`
   };
@@ -159,18 +169,18 @@ async function meta(id) {
   const idx = await loadIndex();
   const c = idx.byId.get(id);
   if (!c) return { meta: null };
-  return { meta: { ...toPreview(c), background: c.logo || undefined }, cacheMaxAge: 600 };
+  const pv = toPreview(c);
+  return { meta: { ...pv, background: liveThumb(c) || c.logo || undefined }, cacheMaxAge: 300 };
 }
 
 const listCache = new Map();
 async function fetchStreams(srcKey, itemId, deadline, measuring = false) {
   const src = SRC[srcKey];
   if (!src) return [];
-  if (src.type === 'static') {
-    const ch = (src.channels || []).find(c => c.id === itemId);
-    if (!ch) return [];
-    return (ch.streams || []).map(s => ({ url: s.url, name: s.name || src.name, title: s.title || '', _src: srcKey, _pri: src.priority || 99,
-      ...(s.referer ? { behaviorHints: { proxyHeaders: { request: { Referer: s.referer, Origin: new URL(s.referer).origin } } } } : {}) }));
+  if (src.type === 'saimo' || src.type === 'static') {
+    const list = src.type === 'saimo' ? (cache.data?.sourceData?.[srcKey]?.[itemId] || []) : ((src.channels || []).find(c => c.id === itemId)?.streams || []);
+    return list.map(s => ({ url: s.url, name: s.name || src.name, title: s.title || '', _src: srcKey, _pri: src.priority || 99,
+      ...((s.referer || s.ua) ? { behaviorHints: { proxyHeaders: { request: { ...(s.referer ? { Referer: s.referer, Origin: new URL(s.referer).origin } : {}), ...(s.ua ? { 'User-Agent': s.ua } : {}) } } } } : {}) }));
   }
   const ck = srcKey + '|' + itemId;
   const hit = listCache.get(ck);
