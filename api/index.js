@@ -253,8 +253,12 @@ async function stream(id) {
   if (!c) return { streams: [] };
   if (!eventVisible(c)) return { streams: [] };
   // se já há >=2 fontes rápidas e estáveis medidas, nem consulta as fontes lentas (NTC)
-  const fastKnown = Object.entries(c.q || {}).filter(([k, q]) => q.ok && q.ttfb < 1200 && stabOf(q) >= 0.8 && !SRC[k.split('|')[0]]?.listTimeoutMs).length;
-  const srcs = c.srcs.filter(([k]) => !(fastKnown >= 2 && SRC[k]?.listTimeoutMs));
+  // links rápidos e 100% estáveis (contando URLs distintas, várias fontes repetem o mesmo link)
+  const fastSet = new Set(Object.entries(c.q || {}).filter(([k, q]) => q.ok && q.ttfb < 800 && stabOf(q) >= 1 && (q.hist || '').length >= 2 && !SRC[k.split('|')[0]]?.listTimeoutMs).map(([k]) => k.split('|').slice(1).join('|')));
+  const fastKnown = fastSet.size;
+  // fonte lenta (NTC) só entra como reserva se não houver link rápido 100% estável:
+  // o app testa as fontes em paralelo e espera a mais lenta antes de tocar
+  const srcs = c.srcs.filter(([k]) => !(fastKnown >= 1 && SRC[k]?.listTimeoutMs));
   const deadline = Date.now() + Number(process.env.LIST_DEADLINE_MS || 3500);
   const t0 = Date.now(), timing = [];
   const lists = await Promise.all(srcs.map(async ([k, sid]) => { const l = await fetchStreams(k, sid, deadline); timing.push([k, sid, l.length, Date.now() - t0]); return l; }));
