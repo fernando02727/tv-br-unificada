@@ -88,6 +88,15 @@
     "listTimeoutMs": 1500
   },
   {
+    "key": "saimo",
+    "name": "Saimo (filtrada)",
+    "type": "saimo",
+    "priority": 4,
+    "enabled": true,
+    "url": "https://canais-saimo.pages.dev/",
+    "note": "Lista pública da Saimo com filtro: sem hosts desativados, sem links com senha, sem DRM, sem proxy de terceiros. Tudo medido."
+  },
+  {
     "key": "iptvorg",
     "name": "IPTV (iptv-org)",
     "priority": 3,

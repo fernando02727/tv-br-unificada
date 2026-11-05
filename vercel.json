@@ -9,9 +9,18 @@
     },
     "api/img.js": {
       "maxDuration": 10
+    },
+    "api/thumb.js": {
+      "maxDuration": 20,
+      "memory": 1024,
+      "includeFiles": "node_modules/ffmpeg-static/ffmpeg"
     }
   },
   "rewrites": [
+    {
+      "source": "/thumb/(.*)",
+      "destination": "/api/thumb"
+    },
     {
       "source": "/img",
       "destination": "/api/img"
