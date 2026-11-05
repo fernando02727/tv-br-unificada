@@ -56,7 +56,9 @@
       "https://epgshare01.online/epgshare01/epg_ripper_BR1.xml.gz",
       "https://epgshare01.online/epgshare01/epg_ripper_BR2.xml.gz",
       "https://www.open-epg.com/files/brazil1.xml.gz",
-      "https://epg.pw/xmltv/epg_BR.xml.gz"
+      "https://epg.pw/xmltv/epg_BR.xml.gz",
+      "https://www.open-epg.com/files/brazil3.xml.gz",
+      "https://raw.githubusercontent.com/matthuisman/i.mjh.nz/master/PlutoTV/br.xml.gz"
     ],
     "hoursBack": 6,
     "hoursAhead": 48,
@@ -64,5 +66,14 @@
     "filler": true
   },
   "subgroup": {},
-  "publicUrl": "https://tv-br-unificada.vercel.app"
+  "publicUrl": "https://tv-br-unificada.vercel.app",
+  "logos": {
+    "primevideo": "https://commons.wikimedia.org/wiki/Special:FilePath/Amazon_Prime_Video_logo.svg",
+    "disneyplus": "https://commons.wikimedia.org/wiki/Special:FilePath/Disney%2B_logo.svg",
+    "max": "https://commons.wikimedia.org/wiki/Special:FilePath/Max_logo.svg",
+    "appletv": "https://commons.wikimedia.org/wiki/Special:FilePath/Apple_TV_Plus_Logo.svg",
+    "dazn": "https://commons.wikimedia.org/wiki/Special:FilePath/DAZN_logo.svg",
+    "ufc": "https://commons.wikimedia.org/wiki/Special:FilePath/UFC_Logo.svg",
+    "ufcpass": "https://commons.wikimedia.org/wiki/Special:FilePath/UFC_Logo.svg"
+  }
 }

@@ -1,5 +1,71 @@
 [
   {
+    "key": "oficial",
+    "name": "Oficial",
+    "type": "static",
+    "priority": 0,
+    "enabled": true,
+    "note": "Feeds públicos oficiais/FAST medidos em 1080p real.",
+    "channels": [
+      {
+        "id": "oficial:getv",
+        "name": "ge tv",
+        "genres": [
+          "Esportes"
+        ],
+        "streams": [
+          {
+            "url": "https://amg00716-globo-amg00716c1-tcl-br-9495.playouts.now.amagi.tv/playlist1080p.m3u8",
+            "title": "Amagi 1080p"
+          }
+        ]
+      },
+      {
+        "id": "oficial:jovempan",
+        "name": "Jovem Pan News",
+        "genres": [
+          "Notícias"
+        ],
+        "streams": [
+          {
+            "url": "https://amg01391-amg01391c3-tcl-spain-5038.playouts.now.amagi.tv/playlist1080-p.m3u8",
+            "title": "Amagi 1080p"
+          }
+        ]
+      },
+      {
+        "id": "oficial:cnnbrasil",
+        "name": "CNN Brasil",
+        "genres": [
+          "Notícias"
+        ],
+        "streams": [
+          {
+            "url": "https://d25usgadhphvwi.cloudfront.net/hls/stv-plus1920x1080/playlist.m3u8",
+            "title": "1080p HEVC"
+          }
+        ]
+      },
+      {
+        "id": "oficial:sbt",
+        "name": "SBT",
+        "genres": [
+          "Abertos"
+        ],
+        "streams": [
+          {
+            "url": "https://6836041ea1117.streamlock.net/cverde/cverde/playlist.m3u8",
+            "title": "streamlock 1080p"
+          },
+          {
+            "url": "https://aovivo.maissbt.com/indexMobile.m3u8",
+            "title": "+SBT 720p"
+          }
+        ]
+      }
+    ]
+  },
+  {
     "key": "tvvio",
     "name": "Tvvio",
     "priority": 1,
