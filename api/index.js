@@ -83,13 +83,24 @@ function manifest() {
   };
 }
 
+function hhmm(t) { return new Date(t).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit', timeZone: 'America/Sao_Paulo' }); }
+// "Agora: Jornal Nacional · 21:30 Novela" a partir da grade guardada no índice
+function nowNext(c) {
+  const p = c.prog || [];
+  const now = Date.now();
+  const i = p.findIndex(([a, b]) => a <= now && now < b);
+  if (i < 0) return '';
+  const cur = p[i], nx = p[i + 1];
+  return `Agora: ${cur[2]}${nx ? ` · ${hhmm(nx[0])} ${nx[2]}` : ''}`;
+}
+
 function toPreview(c) {
   const n = new Set(c.srcs.map(s => s[0])).size;
   return {
     id: c.id, type: 'tv', name: c.name,
     poster: c.logo || undefined, logo: c.logo || undefined, posterShape: 'square',
-    genres: [c.group],
-    description: `${c.srcs.length} opção(ões) de ${n} addon(s): ${[...new Set(c.srcs.map(s => SRC[s[0]]?.name || s[0]))].join(', ')}`
+    genres: [c.sub || c.group],
+    description: nowNext(c) || `${c.sub || c.group} · ${n} fonte(s): ${[...new Set(c.srcs.map(s => SRC[s[0]]?.name || s[0]))].join(', ')}`
   };
 }
 
@@ -127,41 +138,119 @@ async function meta(id) {
   return { meta: { ...toPreview(c), background: c.logo || undefined }, cacheMaxAge: 600 };
 }
 
-async function fetchStreams(srcKey, itemId) {
+async function fetchStreams(srcKey, itemId, deadline) {
   const src = SRC[srcKey];
   if (!src) return [];
   const base = manifestUrlOf(src).replace(/\/manifest\.json(\?.*)?$/, '');
   if (!base) return [];
   const ctl = new AbortController();
-  const t = setTimeout(() => ctl.abort(), STREAM_TIMEOUT);
+  const t = setTimeout(() => ctl.abort(), Math.max(500, Math.min(STREAM_TIMEOUT, deadline - Date.now())));
   try {
     const r = await fetch(`${base}/stream/tv/${encodeURIComponent(itemId)}.json`, { headers: { 'user-agent': UA }, signal: ctl.signal });
     if (!r.ok) return [];
     const j = await r.json();
-    return (j.streams || []).filter(s => s.url || s.ytId || s.infoHash).map(s => ({
-      ...s,
-      name: `📡 ${src.name}`,
-      title: [s.name, s.title || s.description].filter(Boolean).join(' · ').replace(/\n+/g, ' ').slice(0, 120) || src.name,
-      behaviorHints: { ...(s.behaviorHints || {}), bingeGroup: 'tvbr-' + srcKey }
-    }));
+    return (j.streams || []).filter(s => s.url && /^https?:/.test(s.url)).map(s => ({ ...s, _src: srcKey, _pri: src.priority || 99 }));
   } catch { return []; }
   finally { clearTimeout(t); }
 }
 
+// Qualidade escrita no nome/título do addon: 2160/1080/720/480
+function textHeight(s) {
+  const t = `${s.name || ''} ${s.title || ''} ${s.description || ''}`.toLowerCase();
+  if (/\b(4k|uhd|2160p?)\b/.test(t)) return 2160;
+  if (/\b(fhd|full ?hd|1080p?)\b/.test(t)) return 1080;
+  if (/\b(hd|720p?)\b/.test(t)) return 720;
+  if (/\b(sd|480p?|360p?)\b/.test(t)) return 480;
+  return 0;
+}
+
+// Testa o link de verdade (como o app faz, mas antes): mede o tempo de resposta,
+// confere se é vídeo ao vivo e lê a resolução da playlist HLS.
+async function probe(s, ms) {
+  const headers = { 'user-agent': UA, ...(s.behaviorHints?.proxyHeaders?.request || {}) };
+  const ctl = new AbortController();
+  const t0 = Date.now();
+  const timer = setTimeout(() => ctl.abort(), ms);
+  try {
+    const r = await fetch(s.url, { headers, signal: ctl.signal, redirect: 'follow' });
+    const ttfb = Date.now() - t0;
+    // 401/403/429: servidor bloqueia o NOSSO IP (datacenter/geo), não quer dizer que o link morreu
+    if ([401, 403, 407, 429].includes(r.status)) return { alive: 1, ttfb, blocked: r.status };
+    if (!r.ok) return { alive: 0, ttfb, status: r.status };
+    const reader = r.body.getReader();
+    let buf = Buffer.alloc(0);
+    while (buf.length < 16384) {
+      const { value, done } = await reader.read();
+      if (done) break;
+      buf = Buffer.concat([buf, Buffer.from(value)]);
+    }
+    try { ctl.abort(); } catch {}
+    const txt = buf.toString('latin1');
+    const ts = buf[0] === 0x47 && (buf.length < 189 || buf[188] === 0x47);
+    const hls = /#EXTM3U/.test(txt);
+    let height = 0, bw = 0;
+    for (const m of txt.matchAll(/RESOLUTION=\d+x(\d+)/g)) height = Math.max(height, +m[1]);
+    for (const m of txt.matchAll(/BANDWIDTH=(\d+)/g)) bw = Math.max(bw, +m[1]);
+    const alive = (ts || (hls && /#EXTINF|#EXT-X-STREAM-INF/.test(txt))) ? 2 : 0;
+    return { alive, ttfb, height, bw, live: ts ? 'ts' : hls ? 'hls' : '' };
+  } catch { return { alive: 1, ttfb: ms + 1, timeout: true }; }
+  finally { clearTimeout(timer); }
+}
+
+function qLabel(h) {
+  return h >= 2160 ? '4K' : h >= 1080 ? '1080p' : h >= 720 ? '720p' : h > 0 ? 'SD' : 'Auto';
+}
+
+const streamCache = new Map();
+
 async function stream(id) {
+  const hit = streamCache.get(id);
+  if (hit && Date.now() - hit.at < 25000) return hit.data;
   const idx = await loadIndex();
   const c = idx.byId.get(id);
   if (!c) return { streams: [] };
-  const lists = await Promise.all(c.srcs.map(([k, sid]) => fetchStreams(k, sid)));
+  const deadline = Date.now() + Number(process.env.LIST_DEADLINE_MS || 3500);
+  const lists = await Promise.all(c.srcs.map(([k, sid]) => fetchStreams(k, sid, deadline)));
   const seen = new Set();
-  const streams = [];
+  let cands = [];
   for (const l of lists) for (const s of l) {
-    const k = s.url || s.externalUrl || s.ytId || s.infoHash || JSON.stringify(s);
-    if (seen.has(k)) continue;
-    seen.add(k);
-    streams.push(s);
+    if (seen.has(s.url)) continue;
+    seen.add(s.url);
+    cands.push(s);
   }
-  return { streams, cacheMaxAge: 30 };
+  cands = cands.slice(0, 16);
+  const probeMs = Number(process.env.PROBE_MS || 1800);
+  const results = process.env.NO_PROBE ? cands.map(() => ({ alive: 1, ttfb: 0 })) : await Promise.all(cands.map(s => probe(s, probeMs)));
+  const ranked = cands.map((s, i) => {
+    const p = results[i];
+    const h = p.height || textHeight(s);
+    return { s, p, h };
+  });
+  // vivos primeiro; depois a melhor qualidade (4K > 1080p > 720p > SD);
+  // na mesma qualidade, o que respondeu mais rápido; por fim a prioridade da fonte
+  ranked.sort((a, b) =>
+    (b.p.alive - a.p.alive) ||
+    ((b.h || 700) - (a.h || 700)) ||
+    (Math.round(a.p.ttfb / 400) - Math.round(b.p.ttfb / 400)) ||
+    (a.s._pri - b.s._pri));
+  const streams = ranked.slice(0, 12).map(({ s, p, h }) => {
+    const src = SRC[s._src];
+    const speed = p.alive === 2 ? (p.ttfb < 400 ? '⚡' : p.ttfb < 1200 ? '●' : '◔') : p.alive === 1 ? '○' : '✕';
+    const orig = [s.name, s.title || s.description].filter(Boolean).join(' · ').replace(/\s+/g, ' ').slice(0, 80);
+    const out = {
+      url: s.url,
+      name: `${qLabel(h)} · ${src?.name || s._src}`,
+      title: `${speed} ${p.alive === 2 ? p.ttfb + ' ms' : p.alive === 1 ? 'não testado' : 'fora do ar'}${orig ? ' · ' + orig : ''}`,
+      behaviorHints: { ...(s.behaviorHints || {}), bingeGroup: 'tvbr-' + s._src }
+    };
+    if (!out.behaviorHints.proxyHeaders) delete out.behaviorHints.proxyHeaders;
+    return out;
+  });
+  const data = { streams, cacheMaxAge: 20 };
+  if (process.env.DEBUG_PROBE || globalThis.__debugProbe) data._debug = ranked.map(({ s, p, h }) => ({ src: s._src, h, ...p, host: s.url.split('/')[2] }));
+  streamCache.set(id, { at: Date.now(), data });
+  if (streamCache.size > 300) streamCache.delete(streamCache.keys().next().value);
+  return data;
 }
 
 function esc(s) { return String(s ?? '').replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c])); }
@@ -245,7 +334,11 @@ export default async function handler(req, res) {
     let m;
     if ((m = p.match(/^\/catalog\/tv\/([^/]+?)(?:\/(.+?))?\.json$/))) return json(await catalog(m[1], parseExtra(m[2])), 600);
     if ((m = p.match(/^\/meta\/tv\/(.+?)\.json$/))) return json(await meta(m[1]), 600);
-    if ((m = p.match(/^\/stream\/tv\/(.+?)\.json$/))) return json(await stream(m[1]), 30);
+    if ((m = p.match(/^\/stream\/tv\/(.+?)\.json$/))) {
+      globalThis.__debugProbe = url.searchParams.has('debug');
+      if (globalThis.__debugProbe) streamCache.delete(m[1]);
+      return json(await stream(m[1]), 20);
+    }
     res.status(404).json({ error: 'not found' });
   } catch (e) {
     res.status(500).json({ error: e.message });
