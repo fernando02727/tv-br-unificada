@@ -75,5 +75,22 @@
     "dazn": "https://commons.wikimedia.org/wiki/Special:FilePath/DAZN_logo.svg",
     "ufc": "https://commons.wikimedia.org/wiki/Special:FilePath/UFC_Logo.svg",
     "ufcpass": "https://commons.wikimedia.org/wiki/Special:FilePath/UFC_Logo.svg"
+  },
+  "posterAlias": {
+    "doishomensemeio": "Two and a Half Men",
+    "chavesclassico": "El Chavo del Ocho",
+    "chaves": "El Chavo del Ocho",
+    "chapolin": "El Chapulín Colorado",
+    "chespirito": "Chespirito",
+    "euapatroaeas": "My Wife and Kids",
+    "todomundoodeiaochris": "Everybody Hates Chris",
+    "escolinhadoprofessorraimundo": "Escolinha do Professor Raimundo",
+    "osimpsons": "The Simpsons",
+    "barneyeseusamigos": "Barney & Friends",
+    "teletubbies": "Teletubbies",
+    "thejetsons": "The Jetsons",
+    "osjetsons": "The Jetsons",
+    "xuxasoparabaixinhos": "Xuxa Só Para Baixinhos",
+    "turmadamonica": "Turma da Mônica"
   }
 }
