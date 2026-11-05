@@ -276,6 +276,36 @@ async function stream(id) {
   return data;
 }
 
+// Ferramenta de pesquisa: mede um addon QUALQUER a partir de São Paulo.
+// /sondar?manifest=<url>&n=6[&catalog=<id>][&type=tv][&search=globo]
+async function sondar(qs) {
+  const man = qs.get('manifest') || '';
+  if (!/^https:\/\/[^/]+\/.*manifest\.json/.test(man)) return { error: 'manifest https obrigatório' };
+  const n = Math.min(Number(qs.get('n') || 6), 12);
+  const base = man.replace(/\/manifest\.json(\?.*)?$/, '');
+  const getJ = async (u, ms = 8000) => { const c = new AbortController(); const t = setTimeout(() => c.abort(), ms); try { const r = await fetch(u, { headers: { 'user-agent': UA }, signal: c.signal }); return r.ok ? await r.json() : { _status: r.status }; } catch (e) { return { _error: e.name }; } finally { clearTimeout(t); } };
+  const m = await getJ(man);
+  if (!m.catalogs) return { error: 'manifest inválido', detail: m };
+  const type = qs.get('type') || 'tv';
+  const cats = (m.catalogs || []).filter(c => qs.get('catalog') ? c.id === qs.get('catalog') : (c.type === type || c.type === 'channel' || c.type === 'live'));
+  const out = { name: m.name, types: m.types, tvCatalogs: cats.map(c => ({ type: c.type, id: c.id, name: c.name, required: (c.extra || []).filter(e => e.isRequired).map(e => e.name) })), items: [] };
+  const cat = cats.find(c => !(c.extra || []).some(e => e.isRequired && e.name !== 'search') || qs.get('search'));
+  if (!cat) return out;
+  const extra = qs.get('search') ? `/search=${encodeURIComponent(qs.get('search'))}` : '';
+  const list = await getJ(`${base}/catalog/${cat.type}/${encodeURIComponent(cat.id)}${extra}.json`);
+  out.catalogUsed = cat.id; out.catalogCount = (list.metas || []).length;
+  const metas = (list.metas || []).slice(0, n);
+  await Promise.all(metas.map(async meta => {
+    const t0 = Date.now();
+    const sj = await getJ(`${base}/stream/${cat.type}/${encodeURIComponent(meta.id)}.json`);
+    const listMs = Date.now() - t0;
+    const streams = (sj.streams || []).filter(s => s.url).slice(0, 4);
+    const res = await Promise.all(streams.map(async s => ({ label: [s.name, s.title || s.description].filter(Boolean).join(' / ').replace(/\s+/g, ' ').slice(0, 90), host: s.url.split('/')[2], ...(await inspectStream(s, 7000)) })));
+    out.items.push({ name: meta.name, id: meta.id, listMs, nStreams: (sj.streams || []).length, streams: res });
+  }));
+  return out;
+}
+
 // Chamado pela atualização do GitHub: mede (daqui, de São Paulo) a qualidade real
 // das fontes de uma lista de canais. Corpo: { channels: [{ id, srcs: [[k, id], ...] }] }
 async function medir(body) {
@@ -363,6 +393,7 @@ export default async function handler(req, res) {
       return res.status(200).send(await statusPage(host, msg));
     }
     if (p === '/manifest.json') return json(manifest(), 3600);
+    if (p === '/sondar') return json(await sondar(url.searchParams), 0);
     if (p === '/medir' && req.method === 'POST') {
       const body = typeof req.body === 'object' && req.body ? req.body : JSON.parse(await new Promise(r => { let d = ''; req.on('data', x => d += x); req.on('end', () => r(d || '{}')); }));
       res.setHeader('Content-Type', 'application/json');
