@@ -60,6 +60,7 @@ async function readSource(src) {
       if (!fresh.length) break;
       for (const m of fresh) {
         seen.add(m.id);
+        if (src.idFilter && !new RegExp(src.idFilter, 'i').test(m.id)) continue;
         const ev = (m.name || '').match(/^\s*(\d{1,2})[:h](\d{2})\s*[-–|·]\s*(.+)$/);
         items.push({ id: m.id, name: m.name || '', logo: m.logo || m.poster || '', genres: m.genres || [], catName: c.name || c.id,
           event: ev ? { h: +ev[1], m: +ev[2], title: ev[3].trim() } : null });
