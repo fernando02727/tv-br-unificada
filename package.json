@@ -11,6 +11,7 @@
     "dev": "node scripts/dev-server.mjs"
   },
   "dependencies": {
-    "@vercel/og": "0.6.3"
+    "@vercel/og": "0.6.3",
+    "sharp": "0.33.5"
   }
 }

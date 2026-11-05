@@ -6,9 +6,16 @@
     },
     "api/logo.js": {
       "maxDuration": 10
+    },
+    "api/img.js": {
+      "maxDuration": 10
     }
   },
   "rewrites": [
+    {
+      "source": "/img",
+      "destination": "/api/img"
+    },
     {
       "source": "/logo/(.*)",
       "destination": "/api/logo"
