@@ -2,6 +2,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { GROUPS, slugify, stripAccents } from '../lib/channels.mjs';
+import { inspectStream } from '../lib/quality.mjs';
 
 const ROOT = path.join(path.dirname(new URL(import.meta.url).pathname), '..');
 const SOURCES = JSON.parse(fs.readFileSync(path.join(ROOT, 'sources.json'), 'utf8'));
@@ -122,7 +123,8 @@ async function catalog(id, extra) {
     if (!g) return { metas: [] };
     list = list.filter(c => c.group === g);
   }
-  if (extra.genre) list = list.filter(c => c.group === extra.genre);
+  list = list.filter(c => eventVisible(c));
+  if (extra.genre) list = list.filter(c => c.group === extra.genre || c.sub === extra.genre);
   if (extra.search) {
     const q = stripAccents(extra.search).toLowerCase().replace(/[^a-z0-9]+/g, '');
     list = list.filter(c => c.key.includes(q) || stripAccents(c.name).toLowerCase().replace(/[^a-z0-9]+/g, '').includes(q));
@@ -203,54 +205,83 @@ function qLabel(h) {
 
 const streamCache = new Map();
 
+function eventVisible(c, now = Date.now()) {
+  return !c.event || (now >= c.eventStart - 30 * 60e3 && now <= c.eventStart + 3 * 3600e3);
+}
+
 async function stream(id) {
   const hit = streamCache.get(id);
-  if (hit && Date.now() - hit.at < 25000) return hit.data;
+  if (hit && Date.now() - hit.at < 20000) return hit.data;
   const idx = await loadIndex();
   const c = idx.byId.get(id);
   if (!c) return { streams: [] };
   const deadline = Date.now() + Number(process.env.LIST_DEADLINE_MS || 3500);
   const lists = await Promise.all(c.srcs.map(([k, sid]) => fetchStreams(k, sid, deadline)));
   const seen = new Set();
-  let cands = [];
-  for (const l of lists) for (const s of l) {
-    if (seen.has(s.url)) continue;
-    seen.add(s.url);
-    cands.push(s);
-  }
-  cands = cands.slice(0, 16);
-  const probeMs = Number(process.env.PROBE_MS || 1800);
-  const results = process.env.NO_PROBE ? cands.map(() => ({ alive: 1, ttfb: 0 })) : await Promise.all(cands.map(s => probe(s, probeMs)));
-  const ranked = cands.map((s, i) => {
-    const p = results[i];
-    const h = p.height || textHeight(s);
-    return { s, p, h };
+  const cands = [];
+  lists.forEach((l, li) => {
+    const [k, sid] = c.srcs[li];
+    l.forEach((s, n) => {
+      if (seen.has(s.url)) return;
+      seen.add(s.url);
+      const q = c.q?.[`${k}|${sid}|${n}`] || null;
+      cands.push({ s, q });
+    });
   });
-  // vivos primeiro; depois a melhor qualidade (4K > 1080p > 720p > SD);
-  // na mesma qualidade, o que respondeu mais rápido; por fim a prioridade da fonte
+  // medição real (feita de hora em hora a partir de São Paulo) manda; texto do addon só se não houver medição
+  const score = ({ s, q }) => {
+    const alive = !q ? 1 : q.ok ? 2 : q.blocked ? 1 : 0;
+    const h = q?.h || textHeight(s) || 700;
+    const hist = q?.hist || '';
+    const stab = hist ? [...hist].filter(x => x === '1').length / hist.length : 0.5;
+    return { alive, h, stab, ttfb: q?.ttfb ?? 1500 };
+  };
+  const ranked = cands.map(x => ({ ...x, sc: score(x) }));
   ranked.sort((a, b) =>
-    (b.p.alive - a.p.alive) ||
-    ((b.h || 700) - (a.h || 700)) ||
-    (Math.round(a.p.ttfb / 400) - Math.round(b.p.ttfb / 400)) ||
+    (b.sc.alive - a.sc.alive) ||
+    (b.sc.h - a.sc.h) ||
+    (b.sc.stab - a.sc.stab) ||
+    (Math.round(a.sc.ttfb / 400) - Math.round(b.sc.ttfb / 400)) ||
     (a.s._pri - b.s._pri));
-  const streams = ranked.slice(0, 12).map(({ s, p, h }) => {
+  const streams = ranked.slice(0, 12).map(({ s, q, sc }) => {
     const src = SRC[s._src];
-    const speed = p.alive === 2 ? (p.ttfb < 400 ? '⚡' : p.ttfb < 1200 ? '●' : '◔') : p.alive === 1 ? '○' : '✕';
-    const orig = [s.name, s.title || s.description].filter(Boolean).join(' · ').replace(/\s+/g, ' ').slice(0, 80);
+    const tag = sc.alive === 2 ? (sc.stab >= 0.8 ? '✅ estável' : '⚠️ oscilando') : sc.alive === 0 ? '✕ fora do ar' : '○ não medido';
+    const extra = q?.ok ? ` · ${q.codec === 'hevc' ? 'H.265' : 'H.264'}${q.kbps ? ' · ' + (q.kbps / 1000).toFixed(1) + ' Mbps' : ''}` : '';
     const out = {
       url: s.url,
-      name: `${qLabel(h)} · ${src?.name || s._src}`,
-      title: `${speed} ${p.alive === 2 ? p.ttfb + ' ms' : p.alive === 1 ? 'não testado' : 'fora do ar'}${orig ? ' · ' + orig : ''}`,
+      name: `${qLabel(sc.h)} · ${src?.name || s._src}`,
+      title: `${tag}${extra}`,
       behaviorHints: { ...(s.behaviorHints || {}), bingeGroup: 'tvbr-' + s._src }
     };
     if (!out.behaviorHints.proxyHeaders) delete out.behaviorHints.proxyHeaders;
     return out;
   });
   const data = { streams, cacheMaxAge: 20 };
-  if (process.env.DEBUG_PROBE || globalThis.__debugProbe) data._debug = ranked.map(({ s, p, h }) => ({ src: s._src, h, ...p, host: s.url.split('/')[2] }));
   streamCache.set(id, { at: Date.now(), data });
   if (streamCache.size > 300) streamCache.delete(streamCache.keys().next().value);
   return data;
+}
+
+// Chamado pela atualização do GitHub: mede (daqui, de São Paulo) a qualidade real
+// das fontes de uma lista de canais. Corpo: { channels: [{ id, srcs: [[k, id], ...] }] }
+async function medir(body) {
+  const out = {};
+  const jobs = [];
+  for (const ch of (body.channels || []).slice(0, 25)) {
+    out[ch.id] = {};
+    for (const [k, sid] of ch.srcs || []) {
+      if (!SRC[k]) continue;
+      jobs.push((async () => {
+        const list = await fetchStreams(k, sid, Date.now() + 4000);
+        await Promise.all(list.slice(0, 4).map(async (s, n) => {
+          const r = await inspectStream(s, 6000);
+          out[ch.id][`${k}|${sid}|${n}`] = { ok: !!r.ok, h: r.h || 0, kbps: r.kbps || 0, ttfb: r.ttfb, codec: r.codec || '', blocked: !!r.blocked };
+        }));
+      })());
+    }
+  }
+  await Promise.all(jobs);
+  return out;
 }
 
 function esc(s) { return String(s ?? '').replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c])); }
@@ -318,6 +349,11 @@ export default async function handler(req, res) {
       return res.status(200).send(await statusPage(host, msg));
     }
     if (p === '/manifest.json') return json(manifest(), 3600);
+    if (p === '/medir' && req.method === 'POST') {
+      const body = typeof req.body === 'object' && req.body ? req.body : JSON.parse(await new Promise(r => { let d = ''; req.on('data', x => d += x); req.on('end', () => r(d || '{}')); }));
+      res.setHeader('Content-Type', 'application/json');
+      return res.status(200).send(JSON.stringify(await medir(body)));
+    }
     if (p === '/epg.xml.gz' || p === '/epg.xml') {
       const buf = await loadEpg();
       res.setHeader('Cache-Control', 'public, max-age=1800');
