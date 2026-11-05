@@ -109,9 +109,9 @@ async function measureQuality(channels, cfg) {
     for (const c of old.channels || []) if (c.q) prev[c.id] = c.q;
   } catch {}
   const batches = [];
-  for (let i = 0; i < channels.length; i += 20) batches.push(channels.slice(i, i + 20));
+  for (let i = 0; i < channels.length; i += 8) batches.push(channels.slice(i, i + 8));
   let done = 0, measured = 0;
-  await pool(batches, 3, async (b) => {
+  await pool(batches, 5, async (b) => {
     try {
       const ctl = new AbortController(); const t = setTimeout(() => ctl.abort(), 30000);
       const r = await fetch(`${cfg.publicUrl}/medir`, { method: 'POST', headers: { 'content-type': 'application/json', 'user-agent': UA },
