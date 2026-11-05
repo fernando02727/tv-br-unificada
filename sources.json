@@ -18,7 +18,8 @@
     "note": "ntctv-live tem ~2000 web TVs pequenas; tire daqui se quiser elas.",
     "dropUnclassified": true,
     "paginate": false,
-    "trustQualityText": false
+    "trustQualityText": false,
+    "listTimeoutMs": 1500
   },
   {
     "key": "bestcine",
@@ -38,7 +39,8 @@
       "iracematv",
       "iracematv_embedtv",
       "m3u-tv"
-    ]
+    ],
+    "listTimeoutMs": 1500
   },
   {
     "key": "meufut",
