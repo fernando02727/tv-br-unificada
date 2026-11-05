@@ -140,9 +140,15 @@ async function meta(id) {
   return { meta: { ...toPreview(c), background: c.logo || undefined }, cacheMaxAge: 600 };
 }
 
-async function fetchStreams(srcKey, itemId, deadline) {
+const listCache = new Map();
+async function fetchStreams(srcKey, itemId, deadline, measuring = false) {
   const src = SRC[srcKey];
   if (!src) return [];
+  const ck = srcKey + '|' + itemId;
+  const hit = listCache.get(ck);
+  if (hit && !measuring && Date.now() - hit.at < 60000) return hit.list;
+  // fonte lenta (ex.: NTC) tem prazo curto: não segura a resposta das rápidas
+  if (src.listTimeoutMs && !measuring) deadline = Math.min(deadline, Date.now() + src.listTimeoutMs);
   const base = manifestUrlOf(src).replace(/\/manifest\.json(\?.*)?$/, '');
   if (!base) return [];
   const ctl = new AbortController();
@@ -151,7 +157,10 @@ async function fetchStreams(srcKey, itemId, deadline) {
     const r = await fetch(`${base}/stream/tv/${encodeURIComponent(itemId)}.json`, { headers: { 'user-agent': UA }, signal: ctl.signal });
     if (!r.ok) return [];
     const j = await r.json();
-    return (j.streams || []).filter(s => s.url && /^https?:/.test(s.url)).map(s => ({ ...s, _src: srcKey, _pri: src.priority || 99 }));
+    const list = (j.streams || []).filter(s => s.url && /^https?:/.test(s.url)).map(s => ({ ...s, _src: srcKey, _pri: src.priority || 99 }));
+    listCache.set(ck, { at: Date.now(), list });
+    if (listCache.size > 2000) listCache.delete(listCache.keys().next().value);
+    return list;
   } catch { return []; }
   finally { clearTimeout(t); }
 }
@@ -277,7 +286,7 @@ async function medir(body) {
     for (const [k, sid] of ch.srcs || []) {
       if (!SRC[k]) continue;
       jobs.push((async () => {
-        const list = await fetchStreams(k, sid, Date.now() + 4000);
+        const list = await fetchStreams(k, sid, Date.now() + 5000, true);
         await Promise.all(list.slice(0, 4).map(async (s, n) => {
           const r = await inspectStream(s, 5000);
           out[ch.id][`${k}|${sid}|${n}`] = { ok: !!r.ok, h: r.h || 0, kbps: r.kbps || 0, ttfb: r.ttfb, codec: r.codec || '', blocked: !!r.blocked, st: r.status || r.kind || '' };
