@@ -1,0 +1,32 @@
+{
+  "_ajuda": "Controle da organização. rename: { 'chave-ou-id': 'Nome' }. hide: ['chave-ou-id']. group: { 'chave-ou-id': 'Esportes' }. As chaves aparecem na página do addon (/canais).",
+  "regions": {
+    "keep": [
+      "SP",
+      "ES"
+    ],
+    "applyToGroups": [
+      "Abertos"
+    ]
+  },
+  "rename": {},
+  "hide": [],
+  "show": [],
+  "group": {},
+  "probeStreams": true,
+  "epg": {
+    "sources": [
+      "https://raw.githubusercontent.com/limaalef/BrazilTVEPG/main/claro.xml",
+      "https://raw.githubusercontent.com/limaalef/BrazilTVEPG/main/vivoplay.xml",
+      "https://iptv-epg.org/files/epg-br.xml.gz",
+      "https://epgshare01.online/epgshare01/epg_ripper_BR1.xml.gz",
+      "https://epgshare01.online/epgshare01/epg_ripper_BR2.xml.gz",
+      "https://www.open-epg.com/files/brazil1.xml.gz",
+      "https://epg.pw/xmltv/epg_BR.xml.gz"
+    ],
+    "hoursBack": 6,
+    "hoursAhead": 48,
+    "manual": {},
+    "filler": true
+  }
+}

@@ -1,7 +1,7 @@
 {
   "functions": {
     "api/index.js": {
-      "includeFiles": "{sources.json,lib/**,data/**}",
+      "includeFiles": "{sources.json,config.json,lib/**,data/**}",
       "maxDuration": 20
     }
   },

@@ -23,8 +23,9 @@
     "key": "bestcine",
     "name": "BestCine",
     "priority": 3,
-    "enabled": true,
-    "manifest": "$ENV:BESTCINE_URL"
+    "enabled": false,
+    "manifest": "$ENV:BESTCINE_URL",
+    "note": "Desativado a pedido. Bloqueia servidores (403)."
   },
   {
     "key": "iracema",
