@@ -98,6 +98,44 @@ function smartTitle(t) {
   return s.toLowerCase().replace(/(^|[\s\-/(])([a-zà-ÿ])/g, (m, a, b) => a + b.toUpperCase()).replace(/\bX\b/g, 'x').replace(/\b(Fc|Sc|Ec|Ac|Cr|Se|Psg)\b/g, m => m.toUpperCase()).replace(/-(pr|sp|rj|mg|rs|sc|go|ba|pe|ce|es|df|mt|ms|pa|am)\b/gi, m => m.toUpperCase());
 }
 
+// Pede ao servidor de São Paulo (Vercel) para medir a qualidade real das fontes.
+// Guarda um histórico das últimas 6 medições para saber o que é estável.
+async function measureQuality(channels, cfg) {
+  if (!cfg.publicUrl || cfg.measure === false) return;
+  const t0 = Date.now();
+  let prev = {};
+  try {
+    const old = await getJSON(`https://raw.githubusercontent.com/${process.env.GITHUB_REPOSITORY || 'fernando02727/tv-br-unificada'}/data/index.json?t=${Date.now()}`, 20000);
+    for (const c of old.channels || []) if (c.q) prev[c.id] = c.q;
+  } catch {}
+  const batches = [];
+  for (let i = 0; i < channels.length; i += 20) batches.push(channels.slice(i, i + 20));
+  let done = 0, measured = 0;
+  await pool(batches, 3, async (b) => {
+    try {
+      const ctl = new AbortController(); const t = setTimeout(() => ctl.abort(), 30000);
+      const r = await fetch(`${cfg.publicUrl}/medir`, { method: 'POST', headers: { 'content-type': 'application/json', 'user-agent': UA },
+        body: JSON.stringify({ channels: b.map(c => ({ id: c.id, srcs: c.srcs })) }), signal: ctl.signal });
+      clearTimeout(t);
+      const res = await r.json();
+      for (const c of b) {
+        const q = res[c.id]; if (!q) continue;
+        for (const [k, v] of Object.entries(q)) {
+          const ph = prev[c.id]?.[k]?.hist || '';
+          v.hist = (ph + (v.ok ? '1' : v.blocked ? '' : '0')).slice(-6);
+          if (!v.h && prev[c.id]?.[k]?.h) v.h = prev[c.id][k].h;
+          measured++;
+        }
+        c.q = q;
+      }
+    } catch (e) { console.log('medição falhou num lote: ' + e.message); }
+    done++;
+  });
+  const hs = channels.flatMap(c => Object.values(c.q || {})).filter(v => v.ok);
+  const dist = {}; for (const v of hs) { const l = v.h >= 2000 ? '4K' : v.h >= 1000 ? '1080p' : v.h >= 700 ? '720p' : v.h ? 'SD' : '?'; dist[l] = (dist[l] || 0) + 1; }
+  console.log(`Qualidade medida em SP: ${measured} fontes, ${hs.length} ok, resoluções ${JSON.stringify(dist)} [${Math.round((Date.now() - t0) / 1000)}s]`);
+}
+
 function fallbackLogos(channels, cfg) {
   // sem logo oficial: cartão gerado com o nome do canal na cor do grupo
   if (!cfg.publicUrl) return;
@@ -215,6 +253,7 @@ async function main() {
     channels = channels.filter(c => !drop.has(c) || has(cfg.show, c));
   }
   for (const c of channels) c.sub = lookup(cfg.subgroup, c) || subgroupOf(c);
+  await measureQuality(channels, cfg);
   sortChannels(channels);
 
   // nomes duplicados depois de padronizar? diferencia pelo sufixo do grupo
