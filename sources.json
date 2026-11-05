@@ -1,0 +1,96 @@
+[
+  {
+    "key": "tvvio",
+    "name": "Tvvio",
+    "priority": 1,
+    "enabled": true,
+    "manifest": "https://tvvio.megaembed-frost.workers.dev/manifest.json"
+  },
+  {
+    "key": "ntc",
+    "name": "NTC TV",
+    "priority": 2,
+    "enabled": true,
+    "manifest": "https://ntcstudios.com.br/ntctv/manifest.json",
+    "excludeCatalogs": [
+      "ntctv-live"
+    ],
+    "note": "ntctv-live tem ~2000 web TVs pequenas; tire daqui se quiser elas."
+  },
+  {
+    "key": "bestcine",
+    "name": "BestCine",
+    "priority": 3,
+    "enabled": true,
+    "manifest": "$ENV:BESTCINE_URL"
+  },
+  {
+    "key": "iracema",
+    "name": "Iracemaflix",
+    "priority": 4,
+    "enabled": true,
+    "manifest": "https://6880ee460bc3-iracemaflix.baby-beamup.club/manifest.json",
+    "includeCatalogs": [
+      "iracematv",
+      "iracematv_embedtv",
+      "m3u-tv"
+    ]
+  },
+  {
+    "key": "meufut",
+    "name": "Meu Futebol",
+    "priority": 5,
+    "enabled": true,
+    "manifest": "https://meufutebol.oneplayhd.com/manifest.json",
+    "defaultGroup": "Esportes"
+  },
+  {
+    "key": "alliptv",
+    "name": "All IPTV",
+    "priority": 6,
+    "enabled": true,
+    "manifest": "https://fun.lnpx.workers.dev/manifest.json",
+    "includeCatalogs": [
+      "cat_portuguese"
+    ]
+  },
+  {
+    "key": "faya",
+    "name": "FayaTV",
+    "priority": 7,
+    "enabled": true,
+    "manifest": "https://fayatv.stravo.site/d/manifest.json",
+    "includeCatalogs": [
+      "tv_Brazil"
+    ]
+  },
+  {
+    "key": "brazuca",
+    "name": "Brazuca Play",
+    "priority": 8,
+    "enabled": false,
+    "manifest": "https://brazuca-play-stremio.vercel.app/manifest.json",
+    "note": "Pluto TV internacional (inglês). Ative se quiser."
+  },
+  {
+    "key": "frostview",
+    "name": "FrostView",
+    "priority": 9,
+    "enabled": true,
+    "manifest": "https://frostview.cloutteam.com/manifest.json"
+  },
+  {
+    "key": "fenix",
+    "name": "Fenix TV",
+    "priority": 10,
+    "enabled": true,
+    "manifest": "https://fenixtv.fenixhub.online/manifest.json"
+  },
+  {
+    "key": "tvplay",
+    "name": "TVPlay",
+    "priority": 11,
+    "enabled": true,
+    "manifest": "https://tvplay.megaembed-frost.workers.dev/manifest.json"
+  }
+]

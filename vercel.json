@@ -1,0 +1,19 @@
+{
+  "functions": {
+    "api/index.js": {
+      "includeFiles": "{sources.json,lib/**,data/**}",
+      "maxDuration": 20
+    }
+  },
+  "rewrites": [
+    {
+      "source": "/(.*)",
+      "destination": "/api/index"
+    }
+  ],
+  "git": {
+    "deploymentEnabled": {
+      "data": false
+    }
+  }
+}

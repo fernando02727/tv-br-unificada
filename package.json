@@ -1,0 +1,11 @@
+{
+  "name": "tv-br-unificada",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "engines": { "node": ">=20" },
+  "scripts": {
+    "build-index": "node scripts/build-index.mjs",
+    "dev": "node scripts/dev-server.mjs"
+  }
+}
