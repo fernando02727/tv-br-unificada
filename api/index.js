@@ -216,7 +216,8 @@ async function stream(id) {
   const c = idx.byId.get(id);
   if (!c) return { streams: [] };
   const deadline = Date.now() + Number(process.env.LIST_DEADLINE_MS || 3500);
-  const lists = await Promise.all(c.srcs.map(([k, sid]) => fetchStreams(k, sid, deadline)));
+  const t0 = Date.now(), timing = [];
+  const lists = await Promise.all(c.srcs.map(async ([k, sid]) => { const l = await fetchStreams(k, sid, deadline); timing.push([k, sid, l.length, Date.now() - t0]); return l; }));
   const seen = new Set();
   const cands = [];
   lists.forEach((l, li) => {
@@ -257,6 +258,7 @@ async function stream(id) {
     return out;
   });
   const data = { streams, cacheMaxAge: 20 };
+  if (globalThis.__debugProbe) return { ...data, _timing: timing, _hasQ: !!c.q, _index: idx.updatedAt };
   streamCache.set(id, { at: Date.now(), data });
   if (streamCache.size > 300) streamCache.delete(streamCache.keys().next().value);
   return data;
