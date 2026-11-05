@@ -55,10 +55,11 @@ async function readSource(src) {
       if (!fresh.length) break;
       for (const m of fresh) {
         seen.add(m.id);
+        if (/^\s*\d{1,2}[:h]\d{2}\s*[-–]/.test(m.name || '')) continue; // eventos com horário
         items.push({ id: m.id, name: m.name || '', logo: m.logo || m.poster || '', genres: m.genres || [], catName: c.name || c.id });
       }
       skip += metas.length;
-      if (!canSkip || seen.size >= MAX_ITEMS_PER_CATALOG) break;
+      if (!canSkip || src.paginate === false || seen.size >= (src.maxPerCatalog || MAX_ITEMS_PER_CATALOG)) break;
     }
   }
   return { items, status: { ok: items.length > 0, count: items.length, catalogs: cats.map(c => c.id), error: errors.join('; ') || (items.length ? '' : 'nenhum canal'), name: man.name } };
@@ -87,12 +88,14 @@ async function main() {
     }
   }
 
+  const dropOthers = new Set(sources.filter(s => s.dropUnclassified).map(s => s.key));
   const channels = [];
   for (const ch of byKey.values()) {
     ch.names.sort((a, b) => a[0] - b[0] || a[1].length - b[1].length);
     ch.logos.sort((a, b) => a[0] - b[0]);
     ch.srcs.sort((a, b) => a[2] - b[2]);
     const group = classify(ch.key, ch.hints);
+    if (group === 'Outros' && ch.srcs.every(([k]) => dropOthers.has(k))) continue;
     channels.push({
       id: 'brtv:' + slugify(ch.key),
       key: ch.key,
