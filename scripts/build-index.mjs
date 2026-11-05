@@ -93,9 +93,19 @@ async function pool(items, n, fn) {
 }
 
 function smartTitle(t) {
-  let s = t.replace(/\b(fhd|uhd|hd|sd|4k|ao vivo|live)\b/gi, ' ').replace(/[|•]+/g, ' ').replace(/\s+/g, ' ').replace(/[\s\-–]+$/, '').trim();
+  let s = t.replace(/\[[^\]]*\]|\([^)]*\)/g, ' ').replace(/\b(fhd|uhd|hd|sd|4k|ao vivo|live)\b/gi, ' ').replace(/[|•]+/g, ' ').replace(/\s+/g, ' ').replace(/[\s\-–]+$/, '').trim();
   if (s !== s.toUpperCase() && s !== s.toLowerCase()) return s.replace(/-(pr|sp|rj|mg|rs|sc|go|ba|pe|ce|es|df|mt|ms|pa|am)\b/gi, m => m.toUpperCase());
   return s.toLowerCase().replace(/(^|[\s\-/(])([a-zà-ÿ])/g, (m, a, b) => a + b.toUpperCase()).replace(/\bX\b/g, 'x').replace(/\b(Fc|Sc|Ec|Ac|Cr|Se|Psg)\b/g, m => m.toUpperCase()).replace(/-(pr|sp|rj|mg|rs|sc|go|ba|pe|ce|es|df|mt|ms|pa|am)\b/gi, m => m.toUpperCase());
+}
+
+function fallbackLogos(channels, cfg) {
+  // sem logo oficial: cartão gerado com o nome do canal na cor do grupo
+  if (!cfg.publicUrl) return;
+  for (const c of channels) if (!c.logo) {
+    const q = new URLSearchParams({ n: c.event ? c.eventTitle : c.name, g: c.group });
+    if (c.event) q.set('t', c.name.slice(0, 5));
+    c.logo = `${cfg.publicUrl}/logo/${encodeURIComponent(c.key)}.png?${q}`;
+  }
 }
 
 async function main() {
@@ -141,7 +151,7 @@ async function main() {
       if (start > Date.now() + 20 * 3600e3) continue;
       const title = smartTitle(ch.event.title);
       Object.assign(c, { event: true, eventStart: start, eventTitle: title, group: 'Esportes',
-        name: fitName(`${String(ch.event.h).padStart(2, '0')}:${String(ch.event.m).padStart(2, '0')} · ${title}`, 30) });
+        name: fitName(`${String(ch.event.h).padStart(2, '0')}:${String(ch.event.m).padStart(2, '0')} · ${title}`, 38) });
       channels.push(c);
       continue;
     }
@@ -218,7 +228,7 @@ async function main() {
   let epgInfo = null;
   if (cfg.epg?.sources?.length) {
     try {
-      const r = await buildEpg(channels, cfg.epg, console.log, () => chooseLogos(channels));
+      const r = await buildEpg(channels, cfg.epg, console.log, async () => { await chooseLogos(channels); fallbackLogos(channels, cfg); });
       fs.mkdirSync(path.dirname(OUT), { recursive: true });
       fs.writeFileSync(path.join(path.dirname(OUT), 'epg.xml.gz'), r.gz);
       epgInfo = { channels: r.matched, programmes: r.programmes };
@@ -226,6 +236,7 @@ async function main() {
   }
 
   if (!cfg.epg?.sources?.length) await chooseLogos(channels);
+  fallbackLogos(channels, cfg);
   for (const c of channels) { delete c.logos; delete c.epgIcon; }
   const status = {};
   for (const [src, r] of results) status[src.key] = { name: src.name, ...r.status };
