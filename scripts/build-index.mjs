@@ -3,9 +3,11 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { channelKey, displayName, classify, sortChannels, slugify, GROUPS } from '../lib/channels.mjs';
+import { channelKey, displayName, classify, slugify, GROUPS, stripAccents } from '../lib/channels.mjs';
+import { sortChannels, subgroupOf } from '../lib/subgroups.mjs';
+import { chooseLogos } from '../lib/logos.mjs';
 import { keepByRegion, regionOf, isForeign } from '../lib/regions.mjs';
-import { prettyName } from '../lib/names.mjs';
+import { prettyName, regionalName, fitName } from '../lib/names.mjs';
 import { buildEpg } from '../lib/epg.mjs';
 
 const ROOT = path.dirname(path.dirname(fileURLToPath(import.meta.url)));
@@ -58,8 +60,9 @@ async function readSource(src) {
       if (!fresh.length) break;
       for (const m of fresh) {
         seen.add(m.id);
-        if (/^\s*\d{1,2}[:h]\d{2}\s*[-–]/.test(m.name || '')) continue; // eventos com horário
-        items.push({ id: m.id, name: m.name || '', logo: m.logo || m.poster || '', genres: m.genres || [], catName: c.name || c.id });
+        const ev = (m.name || '').match(/^\s*(\d{1,2})[:h](\d{2})\s*[-–|·]\s*(.+)$/);
+        items.push({ id: m.id, name: m.name || '', logo: m.logo || m.poster || '', genres: m.genres || [], catName: c.name || c.id,
+          event: ev ? { h: +ev[1], m: +ev[2], title: ev[3].trim() } : null });
       }
       skip += metas.length;
       if (!canSkip || src.paginate === false || seen.size >= (src.maxPerCatalog || MAX_ITEMS_PER_CATALOG)) break;
@@ -89,6 +92,12 @@ async function pool(items, n, fn) {
   await Promise.all(Array.from({ length: n }, async () => { while (i < items.length) { const k = i++; await fn(items[k], k); } }));
 }
 
+function smartTitle(t) {
+  const s = t.replace(/\s+/g, ' ').trim();
+  if (s !== s.toUpperCase()) return s;
+  return s.toLowerCase().replace(/(^|[\s\-/(])([a-zà-ÿ])/g, (m, a, b) => a + b.toUpperCase()).replace(/\bX\b/g, 'x').replace(/\b(Fc|Sc|Ec|Ac|Cr|Se)\b/g, m => m.toUpperCase());
+}
+
 async function main() {
   const cfg = fs.existsSync(path.join(ROOT, 'config.json')) ? JSON.parse(fs.readFileSync(path.join(ROOT, 'config.json'), 'utf8')) : {};
   const sources = JSON.parse(fs.readFileSync(path.join(ROOT, 'sources.json'), 'utf8')).filter(s => s.enabled !== false);
@@ -101,10 +110,10 @@ async function main() {
   const byKey = new Map();
   for (const [src, { items }] of results) {
     for (const it of items) {
-      const key = channelKey(it.name);
+      let key = it.event ? 'evt' + String(it.event.h).padStart(2, '0') + String(it.event.m).padStart(2, '0') + channelKey(it.event.title).slice(0, 40) : channelKey(it.name);
       if (!key) continue;
       let ch = byKey.get(key);
-      if (!ch) { ch = { key, names: [], logos: [], hints: [], srcs: [] }; byKey.set(key, ch); }
+      if (!ch) { ch = { key, names: [], logos: [], hints: [], srcs: [], event: it.event }; byKey.set(key, ch); }
       ch.names.push([src.priority, displayName(it.name)]);
       if (it.logo) ch.logos.push([src.priority, it.logo]);
       ch.hints.push(...it.genres, it.catName);
@@ -123,16 +132,45 @@ async function main() {
     ch.logos.sort((a, b) => a[0] - b[0]);
     ch.srcs.sort((a, b) => a[2] - b[2]);
     const id = 'brtv:' + slugify(ch.key);
-    const c = { id, key: ch.key, name: ch.names[0][1], logo: ch.logos[0]?.[1] || '', group: classify(ch.key, ch.hints), srcs: ch.srcs.map(([k, sid]) => [k, sid]) };
+    const c = { id, key: ch.key, name: ch.names[0][1], logos: [...new Set(ch.logos.map(l => l[1]))], group: classify(ch.key, ch.hints), srcs: ch.srcs.map(([k, sid]) => [k, sid]) };
+    if (ch.event) {
+      // horário do jogo em Brasília (UTC-3); se já passou há mais de 4 h, é de amanhã ou já acabou
+      const nowBr = new Date(Date.now() - 3 * 3600e3);
+      let start = Date.UTC(nowBr.getUTCFullYear(), nowBr.getUTCMonth(), nowBr.getUTCDate(), ch.event.h + 3, ch.event.m);
+      if (start < Date.now() - 4 * 3600e3) start += 24 * 3600e3;
+      if (start > Date.now() + 20 * 3600e3) continue;
+      const title = smartTitle(ch.event.title);
+      Object.assign(c, { event: true, eventStart: start, eventTitle: title, group: 'Esportes',
+        name: fitName(`${String(ch.event.h).padStart(2, '0')}:${String(ch.event.m).padStart(2, '0')} · ${title}`, 30) });
+      channels.push(c);
+      continue;
+    }
     const g = lookup(cfg.group, c);
     if (g && GROUPS.includes(g)) c.group = g;
     if (c.group === 'Outros' && ch.srcs.every(([k]) => dropOthers.has(k)) && !has(cfg.show, c)) continue;
     if (has(cfg.hide, c)) { hidden.manual++; continue; }
     if (!has(cfg.show, c) && !keepByRegion(c, cfg.regions)) { hidden.regiao++; continue; }
     if (!has(cfg.show, c) && cfg.hideForeign !== false && isForeign(c)) { hidden.estrangeiro++; continue; }
-    c.name = lookup(cfg.rename, c) || prettyName(c.key, c.name);
     const uf = regionOf(c); if (uf && c.group === 'Abertos') c.region = uf;
+    c.name = lookup(cfg.rename, c) || (c.region && regionalName(c)) || prettyName(c.key, c.name);
     channels.push(c);
+  }
+
+  // mesmo nome final = mesmo canal (ex.: "Globo ES", "TV Gazeta Vitória ES" -> "Globo Vitória")
+  {
+    const byName = new Map();
+    const merged = [];
+    for (const c of channels) {
+      const k = stripAccents(c.name).toLowerCase();
+      const o = byName.get(k);
+      if (o && !c.event) {
+        for (const s of c.srcs) if (!o.srcs.some(x => x[0] === s[0] && x[1] === s[1])) o.srcs.push(s);
+        o.logos.push(...c.logos);
+        continue;
+      }
+      byName.set(k, c); merged.push(c);
+    }
+    channels = merged;
   }
 
   if (cfg.probeStreams !== false) {
@@ -147,6 +185,26 @@ async function main() {
     hidden.semFonte = before - channels.length;
     console.log(`Teste de fontes: ${channels.length}/${before} com link funcionando [${Math.round((Date.now() - t0) / 1000)}s]`);
   }
+  // regionais: no máximo N por rede em cada estado (capital primeiro, depois mais fontes)
+  {
+    const max = cfg.regions?.maxPerNetwork ?? 3;
+    const capital = /São Paulo|Vitória/;
+    const buckets = new Map();
+    for (const c of channels.filter(c => c.region)) {
+      const net = c.name.split(' ')[0];
+      const k = net + '|' + c.region;
+      if (!buckets.has(k)) buckets.set(k, []);
+      buckets.get(k).push(c);
+    }
+    const drop = new Set();
+    for (const list of buckets.values()) {
+      list.sort((a, b) => (capital.test(b.name) - capital.test(a.name)) || (b.srcs.length - a.srcs.length));
+      list.slice(max).forEach(c => drop.add(c));
+    }
+    hidden.limiteRegional = drop.size;
+    channels = channels.filter(c => !drop.has(c) || has(cfg.show, c));
+  }
+  for (const c of channels) c.sub = lookup(cfg.subgroup, c) || subgroupOf(c);
   sortChannels(channels);
 
   // nomes duplicados depois de padronizar? diferencia pelo sufixo do grupo
@@ -160,13 +218,15 @@ async function main() {
   let epgInfo = null;
   if (cfg.epg?.sources?.length) {
     try {
-      const r = await buildEpg(channels, cfg.epg);
+      const r = await buildEpg(channels, cfg.epg, console.log, () => chooseLogos(channels));
       fs.mkdirSync(path.dirname(OUT), { recursive: true });
       fs.writeFileSync(path.join(path.dirname(OUT), 'epg.xml.gz'), r.gz);
       epgInfo = { channels: r.matched, programmes: r.programmes };
     } catch (e) { console.log('EPG falhou: ' + e.message); }
   }
 
+  if (!cfg.epg?.sources?.length) await chooseLogos(channels);
+  for (const c of channels) { delete c.logos; delete c.epgIcon; }
   const status = {};
   for (const [src, r] of results) status[src.key] = { name: src.name, ...r.status };
   const index = {
