@@ -17,7 +17,8 @@
     ],
     "note": "ntctv-live tem ~2000 web TVs pequenas; tire daqui se quiser elas.",
     "dropUnclassified": true,
-    "paginate": false
+    "paginate": false,
+    "trustQualityText": false
   },
   {
     "key": "bestcine",
