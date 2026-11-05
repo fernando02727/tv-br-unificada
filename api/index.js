@@ -11,12 +11,13 @@ const INDEX_TTL = 5 * 60 * 1000;
 const STREAM_TIMEOUT = Number(process.env.STREAM_TIMEOUT_MS || 8000);
 const PAGE = 100;
 
-const OWNER = process.env.GITHUB_OWNER || process.env.VERCEL_GIT_REPO_OWNER;
-const REPO = process.env.GITHUB_REPO || process.env.VERCEL_GIT_REPO_SLUG;
+const OWNER = process.env.GITHUB_OWNER || process.env.VERCEL_GIT_REPO_OWNER || 'fernando02727';
+const REPO = process.env.GITHUB_REPO || process.env.VERCEL_GIT_REPO_SLUG || 'tv-br-unificada';
 const INDEX_URL = process.env.INDEX_URL || (OWNER && REPO ? `https://raw.githubusercontent.com/${OWNER}/${REPO}/data/index.json` : '');
 
 const EPG_URL = INDEX_URL.replace(/index\.json$/, 'epg.xml.gz');
 let cache = { at: 0, data: null };
+let lastIndexError = '';
 let epgCache = { at: 0, buf: null };
 async function loadEpg() {
   if (epgCache.buf && Date.now() - epgCache.at < 15 * 60 * 1000) return epgCache.buf;
@@ -43,6 +44,7 @@ async function loadIndex(force = false) {
     data.byId = new Map(data.channels.map(c => [c.id, c]));
     cache = { at: Date.now(), data };
   } catch (e) {
+    lastIndexError = `${e.message} (${INDEX_URL || 'sem INDEX_URL'})`;
     if (!cache.data) {
       const local = path.join(ROOT, 'data', 'index.json');
       const data = fs.existsSync(local) ? JSON.parse(fs.readFileSync(local, 'utf8')) : { channels: [], sources: {}, updatedAt: null };
@@ -180,7 +182,7 @@ a.btn,button{display:inline-block;background:#6c5ce7;color:#fff;border:0;border-
 a.alt{background:#2d3443}table{width:100%;border-collapse:collapse;font-size:14px}td,th{padding:6px;border-bottom:1px solid #232a36;text-align:left;vertical-align:top}
 .ok{color:#2ecc71}.bad{color:#e74c3c}code{background:#232a36;padding:2px 6px;border-radius:4px;word-break:break-all}.pill{display:inline-block;background:#232a36;border-radius:99px;padding:3px 10px;margin:3px;font-size:13px}</style></head><body>
 <h1>📺 TV BR Unificada</h1><small>Última atualização: ${esc(when)} · ${idx.totalChannels || 0} canais únicos (de ${idx.totalItems || 0} entradas)</small>
-${msg ? `<div class="card">${msg}</div>` : ''}
+${msg ? `<div class="card">${msg}</div>` : ''}${lastIndexError ? `<div class="card err">Aviso: usando cópia local do índice (${esc(lastIndexError)})</div>` : ''}
 <div class="card"><b>Instalar no Nuvio/Stremio</b><br><a class="btn" href="stremio://${esc(host)}/manifest.json">Instalar</a>
 <div style="margin-top:8px">Ou cole este link na aba Addons: <code>${esc(manifestUrl)}</code></div></div>
 <div class="card"><b>Guia de programação (XMLTV)</b><br>No Nuvio: Guia → Opções → Adicionar guia XMLTV e cole:<br><code>https://${esc(host)}/epg.xml.gz</code>
