@@ -303,7 +303,11 @@ async function stream(id) {
     const stable = alive === 2 && stab >= 0.8 && ttfb < 2500 ? 1 : 0;
     return { alive, h, stab, ttfb, stable };
   };
+  // fora: páginas HTML (não são vídeo)
+  cands = cands.filter(x => !/\.(html?|php)(\?|$)/i.test(x.s.url));
   let ranked = cands.map(x => ({ ...x, sc: score(x) }));
+  // link com cabeçalhos e sem medição vira "armadilha de 25 s" no app: só entra se faltar opção estável
+  if (ranked.filter(x => x.sc.stable).length >= 2) ranked = ranked.filter(x => x.q || !x.s.behaviorHints?.proxyHeaders);
   const alive = ranked.filter(x => x.sc.alive > 0);
   if (alive.length) ranked = alive; // mortos saem da lista (o app não consegue detectá-los sozinho)
   // ordem: estável > melhor resolução REAL > mais rápido > estabilidade > prioridade da fonte
@@ -375,6 +379,7 @@ async function sondar(qs) {
 // Chamado pela atualização do GitHub: mede (daqui, de São Paulo) a qualidade real
 // das fontes de uma lista de canais. Corpo: { channels: [{ id, srcs: [[k, id], ...] }] }
 async function medir(body) {
+  await loadIndex(); // precisa do índice para as fontes 'saimo'
   const out = {};
   const jobs = [];
   for (const ch of (body.channels || []).slice(0, 12)) {
@@ -496,7 +501,7 @@ export default async function handler(req, res) {
       if (globalThis.__debugProbe) streamCache.delete(m[1]);
       const data = await stream(m[1]);
       res.setHeader('Content-Type', 'application/json; charset=utf-8');
-      res.setHeader('Cache-Control', globalThis.__debugProbe ? 'no-store' : 'public, max-age=15, s-maxage=20, stale-while-revalidate=60');
+      res.setHeader('Cache-Control', globalThis.__debugProbe ? 'no-store' : 'public, max-age=15, s-maxage=30, stale-while-revalidate=86400');
       return res.status(200).send(JSON.stringify(data));
     }
     res.status(404).json({ error: 'not found' });

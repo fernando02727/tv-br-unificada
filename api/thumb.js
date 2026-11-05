@@ -43,7 +43,7 @@ async function liveChunk(s) {
 function frame(input) {
   return new Promise((ok, fail) => {
     const out = path.join(os.tmpdir(), `f${process.pid}${Date.now()}.jpg`);
-    const p = spawn(ffmpegPath, ['-hide_banner', '-loglevel', 'error', '-y', '-i', input, '-frames:v', '1', '-vf', 'scale=640:-2', '-q:v', '4', out]);
+    const p = spawn(ffmpegPath, ['-hide_banner', '-loglevel', 'error', '-y', '-skip_frame', 'nokey', '-i', input, '-map', '0:v:0', '-an', '-sn', '-dn', '-frames:v', '1', '-vf', 'scale=640:-2', '-q:v', '4', out]);
     const t = setTimeout(() => p.kill('SIGKILL'), 7000);
     p.on('close', code => { clearTimeout(t); if (code === 0 && fs.existsSync(out)) { const b = fs.readFileSync(out); fs.rmSync(out, { force: true }); ok(b); } else fail(new Error('ffmpeg ' + code)); });
   });
@@ -82,8 +82,17 @@ export default async function handler(req, res) {
     res.setHeader('Cache-Control', 'public, max-age=300, s-maxage=600, stale-while-revalidate=1200');
     return res.status(200).send(out);
   } catch (e) {
-    // sem prévia: devolve o logo (ou 404) para a TV mostrar algo
-    if (logo) { res.setHeader('Cache-Control', 'public, s-maxage=120'); res.writeHead(302, { Location: logo }); return res.end(); }
+    // sem prévia: logo centralizado num quadro 16:9 (mantém o formato do card)
+    if (logo) {
+      try {
+        const lb = Buffer.from(await (await fetch(logo, { headers: { 'user-agent': UA } })).arrayBuffer());
+        const l = await sharp(lb).resize(300, 180, { fit: 'contain', background: { r: 0, g: 0, b: 0, alpha: 0 } }).png().toBuffer();
+        const out = await sharp({ create: { width: 640, height: 360, channels: 3, background: { r: 22, g: 26, b: 34 } } }).composite([{ input: l, gravity: 'center' }]).jpeg({ quality: 75 }).toBuffer();
+        res.setHeader('Content-Type', 'image/jpeg'); res.setHeader('Cache-Control', 'public, s-maxage=180');
+        return res.status(200).send(out);
+      } catch {}
+      res.setHeader('Cache-Control', 'public, s-maxage=120'); res.writeHead(302, { Location: logo }); return res.end();
+    }
     return res.status(404).send('sem prévia: ' + e.message);
   }
 }
