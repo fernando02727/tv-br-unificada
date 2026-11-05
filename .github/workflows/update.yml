@@ -1,0 +1,47 @@
+name: Atualizar canais
+
+on:
+  schedule:
+    - cron: "*/30 * * * *"   # automático a cada 30 min
+  workflow_dispatch: {}       # botão "Run workflow" = atualização manual
+  push:
+    branches: [main]
+    paths: ["sources.json", "lib/**", "scripts/**"]
+
+permissions:
+  contents: write
+
+concurrency:
+  group: atualizar-canais
+  cancel-in-progress: false
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Montar índice de canais
+        env:
+          BESTCINE_URL: ${{ secrets.BESTCINE_URL }}
+        run: node scripts/build-index.mjs out/index.json
+      - name: Publicar na branch data
+        run: |
+          git config user.name "tvbr-bot"
+          git config user.email "tvbr-bot@users.noreply.github.com"
+          git fetch origin data || true
+          if git rev-parse --verify origin/data >/dev/null 2>&1; then
+            git worktree add /tmp/data origin/data
+            cd /tmp/data && git checkout -B data
+          else
+            git worktree add --detach /tmp/data
+            cd /tmp/data && git checkout --orphan data && git rm -rf . >/dev/null 2>&1 || true
+          fi
+          cp "$GITHUB_WORKSPACE/out/index.json" /tmp/data/index.json
+          cd /tmp/data
+          git add index.json
+          git commit -m "canais $(date -u +%Y-%m-%dT%H:%MZ)" || echo "sem mudanças"
+          git push origin data
