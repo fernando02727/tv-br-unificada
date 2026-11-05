@@ -93,9 +93,9 @@ async function pool(items, n, fn) {
 }
 
 function smartTitle(t) {
-  const s = t.replace(/\s+/g, ' ').trim();
-  if (s !== s.toUpperCase()) return s;
-  return s.toLowerCase().replace(/(^|[\s\-/(])([a-zà-ÿ])/g, (m, a, b) => a + b.toUpperCase()).replace(/\bX\b/g, 'x').replace(/\b(Fc|Sc|Ec|Ac|Cr|Se)\b/g, m => m.toUpperCase());
+  let s = t.replace(/\b(fhd|uhd|hd|sd|4k|ao vivo|live)\b/gi, ' ').replace(/[|•]+/g, ' ').replace(/\s+/g, ' ').replace(/[\s\-–]+$/, '').trim();
+  if (s !== s.toUpperCase() && s !== s.toLowerCase()) return s.replace(/-(pr|sp|rj|mg|rs|sc|go|ba|pe|ce|es|df|mt|ms|pa|am)\b/gi, m => m.toUpperCase());
+  return s.toLowerCase().replace(/(^|[\s\-/(])([a-zà-ÿ])/g, (m, a, b) => a + b.toUpperCase()).replace(/\bX\b/g, 'x').replace(/\b(Fc|Sc|Ec|Ac|Cr|Se|Psg)\b/g, m => m.toUpperCase()).replace(/-(pr|sp|rj|mg|rs|sc|go|ba|pe|ce|es|df|mt|ms|pa|am)\b/gi, m => m.toUpperCase());
 }
 
 async function main() {
