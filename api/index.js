@@ -15,7 +15,23 @@ const OWNER = process.env.GITHUB_OWNER || process.env.VERCEL_GIT_REPO_OWNER;
 const REPO = process.env.GITHUB_REPO || process.env.VERCEL_GIT_REPO_SLUG;
 const INDEX_URL = process.env.INDEX_URL || (OWNER && REPO ? `https://raw.githubusercontent.com/${OWNER}/${REPO}/data/index.json` : '');
 
+const EPG_URL = INDEX_URL.replace(/index\.json$/, 'epg.xml.gz');
 let cache = { at: 0, data: null };
+let epgCache = { at: 0, buf: null };
+async function loadEpg() {
+  if (epgCache.buf && Date.now() - epgCache.at < 15 * 60 * 1000) return epgCache.buf;
+  try {
+    const r = await fetch(EPG_URL + '?t=' + Math.floor(Date.now() / 600000), { headers: { 'user-agent': UA } });
+    if (!r.ok) throw new Error('EPG HTTP ' + r.status);
+    epgCache = { at: Date.now(), buf: Buffer.from(await r.arrayBuffer()) };
+  } catch (e) {
+    if (epgCache.buf) return epgCache.buf;
+    const local = path.join(ROOT, 'data', 'epg.xml.gz');
+    if (!fs.existsSync(local)) throw e;
+    epgCache = { at: Date.now() - 14 * 60 * 1000, buf: fs.readFileSync(local) };
+  }
+  return epgCache.buf;
+}
 
 async function loadIndex(force = false) {
   if (!force && cache.data && Date.now() - cache.at < INDEX_TTL) return cache.data;
@@ -167,9 +183,11 @@ a.alt{background:#2d3443}table{width:100%;border-collapse:collapse;font-size:14p
 ${msg ? `<div class="card">${msg}</div>` : ''}
 <div class="card"><b>Instalar no Nuvio/Stremio</b><br><a class="btn" href="stremio://${esc(host)}/manifest.json">Instalar</a>
 <div style="margin-top:8px">Ou cole este link na aba Addons: <code>${esc(manifestUrl)}</code></div></div>
-<div class="card"><b>Atualizar</b><br>Atualiza sozinho a cada 30 min. Para forçar agora:
+<div class="card"><b>Guia de programação (XMLTV)</b><br>No Nuvio: Guia → Opções → Adicionar guia XMLTV e cole:<br><code>https://${esc(host)}/epg.xml.gz</code>
+<div style="margin-top:6px"><small>${idx.epg ? `${idx.epg.channels} canais com grade real; os demais mostram blocos com o nome do canal.` : 'ainda não gerado'}</small></div></div>
+<div class="card"><b>Atualizar</b><br>Atualiza sozinho a cada 1 hora. Para forçar agora:
 <br><a class="btn" href="${esc(actions)}" target="_blank">Atualizar agora (GitHub → Run workflow)</a>${process.env.GH_TOKEN && process.env.REFRESH_KEY ? ` <a class="btn alt" href="/atualizar?key=CHAVE">Atualizar com 1 clique (troque CHAVE)</a>` : ''}</div>
-<div class="card"><b>Grupos</b><br>${Object.entries(groups).map(([g, n]) => `<span class="pill">${esc(g)}: ${n}</span>`).join('')}</div>
+<div class="card"><b>Grupos</b> · <a href="/canais" style="color:#a29bfe">ver lista de canais</a><br>${idx.hidden ? `<small>Ocultos: ${idx.hidden.regiao || 0} regionais fora de SP/ES · ${idx.hidden.estrangeiro || 0} estrangeiros · ${idx.hidden.semFonte || 0} sem link funcionando · ${idx.hidden.manual || 0} manuais</small><br>` : ''}${Object.entries(groups).map(([g, n]) => `<span class="pill">${esc(g)}: ${n}</span>`).join('')}</div>
 <div class="card"><b>Addons de origem</b><table><tr><th>Addon</th><th>Status</th><th>Canais</th><th>Obs.</th></tr>${rows}</table></div>
 </body></html>`;
 }
@@ -209,6 +227,19 @@ export default async function handler(req, res) {
       return res.status(200).send(await statusPage(host, msg));
     }
     if (p === '/manifest.json') return json(manifest(), 3600);
+    if (p === '/epg.xml.gz' || p === '/epg.xml') {
+      const buf = await loadEpg();
+      res.setHeader('Cache-Control', 'public, max-age=1800');
+      if (p === '/epg.xml') { res.setHeader('Content-Type', 'application/xml; charset=utf-8'); return res.status(200).send((await import('node:zlib')).gunzipSync(buf)); }
+      res.setHeader('Content-Type', 'application/gzip');
+      return res.status(200).send(buf);
+    }
+    if (p === '/canais') {
+      const idx = await loadIndex();
+      const rows = idx.channels.map(c => `<tr><td>${esc(c.name)}</td><td>${esc(c.group)}${c.region ? ' · ' + esc(c.region) : ''}</td><td>${c.srcs.length}</td><td>${c.epg ? '✓' : ''}</td><td><code>${esc(c.key)}</code></td></tr>`).join('');
+      res.setHeader('Content-Type', 'text/html; charset=utf-8');
+      return res.status(200).send(`<!doctype html><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Canais · TV BR</title><style>:root{color-scheme:dark}body{font-family:system-ui;background:#0d0f14;color:#e8e8ee;padding:16px;max-width:900px;margin:auto}table{width:100%;border-collapse:collapse;font-size:14px}td,th{padding:5px;border-bottom:1px solid #232a36;text-align:left}code{color:#9aa}</style><h2>${idx.channels.length} canais</h2><p><small>A chave (última coluna) é o que se usa no config.json para renomear, ocultar ou mudar de grupo.</small></p><table><tr><th>Canal</th><th>Grupo</th><th>Fontes</th><th>Grade</th><th>Chave</th></tr>${rows}</table>`);
+    }
     let m;
     if ((m = p.match(/^\/catalog\/tv\/([^/]+?)(?:\/(.+?))?\.json$/))) return json(await catalog(m[1], parseExtra(m[2])), 600);
     if ((m = p.match(/^\/meta\/tv\/(.+?)\.json$/))) return json(await meta(m[1]), 600);
