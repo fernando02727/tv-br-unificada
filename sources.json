@@ -15,7 +15,9 @@
     "excludeCatalogs": [
       "ntctv-live"
     ],
-    "note": "ntctv-live tem ~2000 web TVs pequenas; tire daqui se quiser elas."
+    "note": "ntctv-live tem ~2000 web TVs pequenas; tire daqui se quiser elas.",
+    "dropUnclassified": true,
+    "paginate": false
   },
   {
     "key": "bestcine",
@@ -52,7 +54,8 @@
     "manifest": "https://fun.lnpx.workers.dev/manifest.json",
     "includeCatalogs": [
       "cat_portuguese"
-    ]
+    ],
+    "dropUnclassified": false
   },
   {
     "key": "faya",
@@ -62,7 +65,8 @@
     "manifest": "https://fayatv.stravo.site/d/manifest.json",
     "includeCatalogs": [
       "tv_Brazil"
-    ]
+    ],
+    "dropUnclassified": false
   },
   {
     "key": "brazuca",
