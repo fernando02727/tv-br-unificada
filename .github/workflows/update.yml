@@ -2,11 +2,11 @@ name: Atualizar canais
 
 on:
   schedule:
-    - cron: "*/30 * * * *"   # automático a cada 30 min
+    - cron: "7 * * * *"      # automático a cada 1 hora
   workflow_dispatch: {}       # botão "Run workflow" = atualização manual
   push:
     branches: [main]
-    paths: ["sources.json", "lib/**", "scripts/**"]
+    paths: ["sources.json", "config.json", "lib/**", "scripts/**"]
 
 permissions:
   contents: write
@@ -41,7 +41,8 @@ jobs:
             cd /tmp/data && git checkout --orphan data && git rm -rf . >/dev/null 2>&1 || true
           fi
           cp "$GITHUB_WORKSPACE/out/index.json" /tmp/data/index.json
+          cp "$GITHUB_WORKSPACE/out/epg.xml.gz" /tmp/data/epg.xml.gz || true
           cd /tmp/data
-          git add index.json
+          git add index.json epg.xml.gz
           git commit -m "canais $(date -u +%Y-%m-%dT%H:%MZ)" || echo "sem mudanças"
           git push origin data
