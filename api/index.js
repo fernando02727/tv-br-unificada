@@ -440,6 +440,16 @@ export default async function handler(req, res) {
     }
     if (p === '/manifest.json') return json(manifest(), 3600);
     if (p === '/sondar') return json(await sondar(url.searchParams), 0);
+    // mede um link de vídeo avulso (ex.: de listas M3U): /medirurl?u=<url>[&ref=<referer>][&ua=<user-agent>]
+    if (p === '/medirurl') {
+      const u = url.searchParams.get('u') || '';
+      if (!/^https?:\/\//.test(u)) return json({ error: 'u obrigatório' }, 0);
+      const h = {};
+      if (url.searchParams.get('ref')) { h.Referer = url.searchParams.get('ref'); h.Origin = new URL(h.Referer).origin; }
+      if (url.searchParams.get('ua')) h['User-Agent'] = url.searchParams.get('ua');
+      const r = await inspectStream({ url: u, behaviorHints: { proxyHeaders: { request: h } } }, 8000);
+      return json({ host: u.split('/')[2], ...r }, 0);
+    }
     if (p === '/medir' && req.method === 'POST') {
       const body = typeof req.body === 'object' && req.body ? req.body : JSON.parse(await new Promise(r => { let d = ''; req.on('data', x => d += x); req.on('end', () => r(d || '{}')); }));
       res.setHeader('Content-Type', 'application/json');
