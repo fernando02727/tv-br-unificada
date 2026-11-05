@@ -232,7 +232,10 @@ async function stream(id) {
   // medição real (feita de hora em hora a partir de São Paulo) manda; texto do addon só se não houver medição
   const score = ({ s, q }) => {
     const alive = !q ? 1 : q.ok ? 2 : q.blocked ? 1 : 0;
-    const h = q?.h || textHeight(s) || 700;
+    // texto do addon só vale se a fonte for confiável; NTC escreve "4K/UHD" em stream 720p
+    let th = textHeight(s);
+    if (SRC[s._src]?.trustQualityText === false && th > 720) th = 720;
+    const h = q?.h || th || 700;
     const hist = q?.hist || '';
     const stab = hist ? [...hist].filter(x => x === '1').length / hist.length : 0.5;
     return { alive, h, stab, ttfb: q?.ttfb ?? 1500 };
@@ -269,15 +272,15 @@ async function stream(id) {
 async function medir(body) {
   const out = {};
   const jobs = [];
-  for (const ch of (body.channels || []).slice(0, 25)) {
+  for (const ch of (body.channels || []).slice(0, 12)) {
     out[ch.id] = {};
     for (const [k, sid] of ch.srcs || []) {
       if (!SRC[k]) continue;
       jobs.push((async () => {
         const list = await fetchStreams(k, sid, Date.now() + 4000);
         await Promise.all(list.slice(0, 4).map(async (s, n) => {
-          const r = await inspectStream(s, 6000);
-          out[ch.id][`${k}|${sid}|${n}`] = { ok: !!r.ok, h: r.h || 0, kbps: r.kbps || 0, ttfb: r.ttfb, codec: r.codec || '', blocked: !!r.blocked };
+          const r = await inspectStream(s, 5000);
+          out[ch.id][`${k}|${sid}|${n}`] = { ok: !!r.ok, h: r.h || 0, kbps: r.kbps || 0, ttfb: r.ttfb, codec: r.codec || '', blocked: !!r.blocked, st: r.status || r.kind || '' };
         }));
       })());
     }
