@@ -268,6 +268,21 @@ async function main() {
   }
   for (const c of channels) c.sub = lookup(cfg.subgroup, c) || subgroupOf(c);
   await measureQuality(channels, cfg);
+  // política automática: some quem falhou nas últimas 4 medições (todas as fontes), volta sozinho quando medir OK
+  {
+    const srcByKey2 = Object.fromEntries(sources.map(s => [s.key, s]));
+    const before = channels.length;
+    channels = channels.filter(c => {
+      if (c.event || has(cfg.show, c)) return true;
+      const qs = Object.entries(c.q || {});
+      if (!qs.length) return true;
+      if (qs.some(([, v]) => v.ok)) return true;
+      const need = c.srcs.some(([k]) => srcByKey2[k]?.type === 'static') ? 12 : 4;
+      return !qs.every(([, v]) => (v.hist || '').length >= need && /0+$/.test(v.hist) && v.hist.slice(-need) === '0'.repeat(need));
+    });
+    hidden.mortoMedido = before - channels.length;
+    if (hidden.mortoMedido) console.log(`Ocultos por falhar nas últimas medições: ${hidden.mortoMedido}`);
+  }
   sortChannels(channels);
 
   // nomes duplicados depois de padronizar? diferencia pelo sufixo do grupo
