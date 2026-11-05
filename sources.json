@@ -22,6 +22,18 @@
     "listTimeoutMs": 1500
   },
   {
+    "key": "iptvorg",
+    "name": "IPTV (iptv-org)",
+    "priority": 3,
+    "enabled": true,
+    "manifest": "https://ip-tv.hatip.dev/manifest.json",
+    "includeCatalogs": [
+      "iptv-all"
+    ],
+    "idFilter": "\\.br($|@)",
+    "note": "Canais abertos BR; vários em 1080p real (SBT, CNN Brasil, Record News)."
+  },
+  {
     "key": "bestcine",
     "name": "BestCine",
     "priority": 3,
