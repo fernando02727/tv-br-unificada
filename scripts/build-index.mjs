@@ -24,15 +24,23 @@ export function resolveManifest(src, env = process.env) {
   return m;
 }
 
-async function getJSON(url, timeout = 20000) {
-  const ctl = new AbortController();
-  const t = setTimeout(() => ctl.abort(), timeout);
-  try {
-    const r = await fetch(url, { headers: { 'user-agent': UA, accept: 'application/json' }, signal: ctl.signal });
-    if (!r.ok) throw new Error('HTTP ' + r.status);
-    const txt = await r.text();
-    try { return JSON.parse(txt); } catch { throw new Error('resposta não é JSON'); }
-  } finally { clearTimeout(t); }
+async function getJSON(url, timeout = 20000, tries = 3) {
+  for (let a = 1; ; a++) {
+    const ctl = new AbortController();
+    const t = setTimeout(() => ctl.abort(), timeout);
+    try {
+      const r = await fetch(url, { headers: { 'user-agent': UA, accept: 'application/json' }, signal: ctl.signal });
+      if ((r.status === 429 || r.status >= 500) && a < tries) {
+        // respeita o limite do addon: espera o Retry-After (ou 3 s, 9 s) e tenta de novo
+        const ra = Number(r.headers.get('retry-after'));
+        await new Promise(res => setTimeout(res, Math.min(30000, (ra > 0 ? ra * 1000 : 3000 * 3 ** (a - 1)))));
+        continue;
+      }
+      if (!r.ok) throw new Error('HTTP ' + r.status);
+      const txt = await r.text();
+      try { return JSON.parse(txt); } catch { throw new Error('resposta não é JSON'); }
+    } finally { clearTimeout(t); }
+  }
 }
 
 async function readSource(src) {
@@ -163,10 +171,25 @@ function fallbackLogos(channels, cfg) {
 async function main() {
   const cfg = fs.existsSync(path.join(ROOT, 'config.json')) ? JSON.parse(fs.readFileSync(path.join(ROOT, 'config.json'), 'utf8')) : {};
   const sources = JSON.parse(fs.readFileSync(path.join(ROOT, 'sources.json'), 'utf8')).filter(s => s.enabled !== false);
-  const results = await Promise.all(sources.map(async s => {
+  let prevCache = {};
+  try { prevCache = (await getJSON(`https://raw.githubusercontent.com/${process.env.GITHUB_REPOSITORY || 'fernando02727/tv-br-unificada'}/refs/heads/data/index.json?t=${Date.now()}`, 20000)).sourceCache || {}; } catch {}
+  const sourceCache = {};
+  const results = await Promise.all(sources.map(async (s, i) => {
+    await new Promise(r => setTimeout(r, i * 400)); // não bate em todos os addons no mesmo instante
     const t0 = Date.now();
-    try { const r = await readSource(s); r.status.ms = Date.now() - t0; return [s, r]; }
-    catch (e) { return [s, { items: [], status: { ok: false, count: 0, error: e.message, ms: Date.now() - t0 } }]; }
+    let r;
+    try { r = await readSource(s); r.status.ms = Date.now() - t0; }
+    catch (e) { r = { items: [], status: { ok: false, count: 0, error: e.message, ms: Date.now() - t0 } }; }
+    if (s.type !== 'static' && s.type !== 'saimo') {
+      const old = prevCache[s.key];
+      if (r.items.length) sourceCache[s.key] = { at: new Date().toISOString(), items: r.items };
+      else if (old?.items?.length && Date.now() - Date.parse(old.at) < 72 * 3600e3) {
+        // falha passageira (ex.: limite 429): usa a última lista boa; os links continuam sendo testados ao vivo
+        sourceCache[s.key] = old;
+        r = { items: old.items, status: { ...r.status, ok: true, count: old.items.length, stale: old.at, error: `${r.status.error} → usando lista de ${old.at.slice(0, 16).replace('T', ' ')} UTC` } };
+      }
+    }
+    return [s, r];
   }));
 
   const byKey = new Map();
@@ -316,6 +339,7 @@ async function main() {
     epg: epgInfo,
     sourceData: SOURCE_DATA,
     sources: status,
+    sourceCache,
     channels
   };
   fs.mkdirSync(path.dirname(OUT), { recursive: true });
