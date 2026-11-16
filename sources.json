@@ -348,7 +348,8 @@
       "zintv_canais"
     ],
     "listTimeoutMs": 2500,
-    "note": "Lista pública (iptv-org + Pluto). Só o catálogo de canais; links com senha são barrados."
+    "note": "Lista pública (iptv-org + Pluto). Só o catálogo de canais; links com senha são barrados.",
+    "dropUnclassified": true
   },
   {
     "key": "bestcine",
