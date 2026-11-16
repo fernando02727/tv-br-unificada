@@ -339,6 +339,18 @@
     "note": "Canais abertos BR; vários em 1080p real (SBT, CNN Brasil, Record News)."
   },
   {
+    "key": "zintv",
+    "name": "ZinTV BR",
+    "priority": 4,
+    "enabled": true,
+    "manifest": "https://streambr.onrender.com/manifest.json",
+    "includeCatalogs": [
+      "zintv_canais"
+    ],
+    "listTimeoutMs": 2500,
+    "note": "Lista pública (iptv-org + Pluto). Só o catálogo de canais; links com senha são barrados."
+  },
+  {
     "key": "bestcine",
     "name": "BestCine",
     "priority": 3,
