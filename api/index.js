@@ -3,6 +3,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { GROUPS, slugify, stripAccents } from '../lib/channels.mjs';
 import { inspectStream } from '../lib/quality.mjs';
+import { CRED, unwrap } from '../lib/saimo.mjs';
 
 const ROOT = path.join(path.dirname(new URL(import.meta.url).pathname), '..');
 const SOURCES = JSON.parse(fs.readFileSync(path.join(ROOT, 'sources.json'), 'utf8'));
@@ -199,7 +200,7 @@ async function fetchStreams(srcKey, itemId, deadline, measuring = false) {
     const r = await fetch(`${base}/stream/tv/${encodeURIComponent(itemId)}.json`, { headers: { 'user-agent': UA }, signal: ctl.signal });
     if (!r.ok) return [];
     const j = await r.json();
-    const list = (j.streams || []).filter(s => s.url && /^https?:/.test(s.url)).map(s => ({ ...s, _src: srcKey, _pri: src.priority || 99 }));
+    const list = (j.streams || []).filter(s => s.url && /^https?:/.test(s.url) && !unwrap(s.url).some(x => CRED.test(x))).map(s => ({ ...s, _src: srcKey, _pri: src.priority || 99 }));
     listCache.set(ck, { at: Date.now(), list });
     if (listCache.size > 2000) listCache.delete(listCache.keys().next().value);
     return list;
