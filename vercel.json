@@ -14,9 +14,16 @@
       "maxDuration": 20,
       "memory": 1024,
       "includeFiles": "node_modules/ffmpeg-static/ffmpeg"
+    },
+    "api/capa.js": {
+      "maxDuration": 10
     }
   },
   "rewrites": [
+    {
+      "source": "/capa/(.*)",
+      "destination": "/api/capa"
+    },
     {
       "source": "/thumb/(.*)",
       "destination": "/api/thumb"
