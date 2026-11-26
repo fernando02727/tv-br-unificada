@@ -16,7 +16,7 @@
       "includeFiles": "node_modules/ffmpeg-static/ffmpeg"
     },
     "api/capa.js": {
-      "maxDuration": 15,
+      "maxDuration": 25,
       "memory": 1024,
       "includeFiles": "lib/*.png"
     }
