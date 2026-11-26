@@ -50,7 +50,11 @@ async function backdrop(bg) {
   catch { return null; }
 }
 async function logoData(file, w) {
-  const b = await sharp(fs.readFileSync(path.join(BRAND_DIR, file))).trim().resize({ width: w * 2, height: 220, fit: 'inside' }).png().toBuffer();
+  let raw = null;
+  try { raw = fs.readFileSync(path.join(BRAND_DIR, file)); } catch {}
+  if (!raw) raw = await get('https://raw.githubusercontent.com/fernando02727/tv-br-unificada/main/lib/brand/' + file);
+  if (!raw) return null;
+  const b = await sharp(raw).trim().resize({ width: w * 2, height: 220, fit: 'inside' }).png().toBuffer();
   const m = await sharp(b).metadata();
   return { src: 'data:image/png;base64,' + b.toString('base64'), w: Math.round(m.width / 2), h: Math.round(m.height / 2) };
 }
@@ -70,7 +74,7 @@ export default async function handler(req, res) {
     if (bg) layers.push({ type: 'img', props: { src: bg, width: W, height: H, style: { position: 'absolute', top: 0, left: 0 } } });
     layers.push(layer({ background: `linear-gradient(180deg, ${b.tint}55 0%, ${b.tint}cc 60%, ${b.tint}f2 100%)` }, null));
     const kids = [];
-    if (b.logo) { const l = await logoData(b.logo, b.lw); kids.push({ type: 'img', props: { src: l.src, width: l.w, height: l.h } }); }
+    if (b.logo) { const l = await logoData(b.logo, b.lw).catch(() => null); if (l) kids.push({ type: 'img', props: { src: l.src, width: l.w, height: l.h } }); }
     if (b.plus) kids.push(el('div', { fontSize: 96, color: '#fff', marginLeft: 6, display: 'flex' }, '+'));
     if (b.name) kids.push(el('div', { fontSize: b.logo ? 54 : 88, color: '#fff', marginLeft: b.logo ? 18 : 0, display: 'flex' }, b.name));
     layers.push(layer({ alignItems: 'center', justifyContent: 'center', flexDirection: 'row' }, kids));
