@@ -16,7 +16,9 @@
       "includeFiles": "node_modules/ffmpeg-static/ffmpeg"
     },
     "api/capa.js": {
-      "maxDuration": 10
+      "maxDuration": 15,
+      "memory": 1024,
+      "includeFiles": "lib/brand/**"
     }
   },
   "rewrites": [
