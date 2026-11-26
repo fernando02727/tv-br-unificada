@@ -9,7 +9,7 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
-const BRAND_DIR = path.join(HERE, '..', 'lib', 'brand');
+const BRAND_DIR = path.join(HERE, '..', 'lib');
 const W = 640, H = 360;
 
 const BRANDS = {
@@ -52,7 +52,7 @@ async function backdrop(bg) {
 async function logoData(file, w) {
   let raw = null;
   try { raw = fs.readFileSync(path.join(BRAND_DIR, file)); } catch {}
-  if (!raw) raw = await get('https://raw.githubusercontent.com/fernando02727/tv-br-unificada/main/lib/brand/' + file);
+  if (!raw) raw = await get('https://raw.githubusercontent.com/fernando02727/tv-br-unificada/main/lib/' + file);
   if (!raw) return null;
   const b = await sharp(raw).trim().resize({ width: w * 2, height: 220, fit: 'inside' }).png().toBuffer();
   const m = await sharp(b).metadata();
